@@ -1,4 +1,4 @@
-from ...hardware.andor.daq_AndorSDK2 import DAQ_AndorSDK2
+from ...hardware.andor_sdk2.daq_AndorSDK2 import DAQ_AndorSDK2
 
 
 class DAQ_1DViewer_Shamrock(DAQ_AndorSDK2):

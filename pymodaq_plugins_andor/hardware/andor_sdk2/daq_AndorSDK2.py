@@ -8,7 +8,7 @@ from pymodaq.daq_viewer.utility_classes import DAQ_Viewer_base
 
 from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis
 from pymodaq.daq_viewer.utility_classes import comon_parameters
-from pymodaq_plugins.hardware.andor import _andorsdk
+from . import _andorsdk
 from pymodaq.daq_utils import custom_parameter_tree
 
 import sys

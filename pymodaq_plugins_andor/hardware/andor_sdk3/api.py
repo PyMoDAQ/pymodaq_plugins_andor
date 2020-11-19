@@ -19,6 +19,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #
+
+# modified by S. Weber 2020
+# PyMoDAQ compatibility
 ################
 
 from . import sdk3cam
@@ -65,15 +68,12 @@ class AndorBase(sdk3cam.SDK3Camera):
         self.PreAmpGainSelector = sdk3cam.ATEnum()
         self.TriggerMode = sdk3cam.ATEnum()
 
+        self.FullAOIControl = sdk3cam.ATBool()
         self.AOIHeight = sdk3cam.ATInt()
         self.AOILeft = sdk3cam.ATInt()
         self.AOITop = sdk3cam.ATInt()
         self.AOIWidth = sdk3cam.ATInt()
         self.AOIStride = sdk3cam.ATInt()
-
-        self.AOIBinning = sdk3cam.ATEnum()
-        self.AOIHBin = sdk3cam.ATInt()
-        self.AOIVBin = sdk3cam.ATInt()
 
         self.FrameCount = sdk3cam.ATInt()
         self.ImageSizeBytes = sdk3cam.ATInt()
@@ -195,6 +195,35 @@ class AndorBase(sdk3cam.SDK3Camera):
             self.nQueued += 1
         # self.camLock.release()
 
+    def queue_single_buffer(self, buf):
+        sdk3.QueueBuffer(self.handle, buf.ctypes.data_as(sdk3.POINTER(sdk3.AT_U8)), buf.nbytes)
+
+    def wait_buffer(self):
+        try:
+            pData, lData = sdk3.WaitBuffer(self.handle, 100)
+        except sdk3.TimeoutError as e:
+            return
+        except sdk3.CameraError as e:
+            #    if not e.errNo == sdk3.AT_ERR_NODATA:
+            #        traceback.print_exc()
+            return
+        return ctypes.addressof(pData.contents)
+
+    def get_image_fom_buffer(self, Nx, Ny, buffer):
+        data = np.empty((Ny, Nx), np.uint16)
+
+        a_s = self.AOIStride.getValue()
+        dt = self.PixelEncoding.getString()
+        sdk3.ConvertBuffer(buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+                           data.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
+                           Nx, Ny, a_s, dt, 'Mono16')
+
+        return data
+
+
+    def flush(self):
+        self._flush()
+
     def _pollBuffer(self):
         try:
             #self.fLog.write('%f\tp\n' % time.time())
@@ -273,17 +302,13 @@ class AndorBase(sdk3cam.SDK3Camera):
         return self.SerialNumber.getValue()
 
     def SetIntegTime(self, iTime):
-        """
-        set Integration time
-        Parameters
-        ----------
-        iTime: (float) Integration time in milliseconds
-        """
-        self.ExposureTime.setValue(iTime*1e-3)
+        """Set Integration time in milliseconds"""
+        self.ExposureTime.setValue(iTime * 1e-3)
         self.FrameRate.setValue(self.FrameRate.max())
 
     def GetIntegTime(self):
-        return self.ExposureTime.getValue()
+        """Return Integration Time in milliseconds"""
+        return self.ExposureTime.getValue() * 1000
 
     def GetCCDWidth(self):
         return self.SensorWidth.getValue()
@@ -514,7 +539,7 @@ def getCameraInfos():
     return models, names, serial_numbers
 
 
-class AndorNeo(AndorBase):
+class AndorCamera(AndorBase):
     def __init__(self, camNum, nbuffer=1):
         # define properties
         self.Overlap = sdk3cam.ATBool()
@@ -526,11 +551,16 @@ class AndorNeo(AndorBase):
         self.TemperatureControl = sdk3cam.ATEnum()
         self.TemperatureStatus = sdk3cam.ATEnum()
         self.SimplePreAmpGainControl = sdk3cam.ATEnum()
+
         self.BitDepth = sdk3cam.ATEnum()
 
         self.ActualExposureTime = sdk3cam.ATFloat()
         self.BurstRate = sdk3cam.ATFloat()
         self.ReadoutTime = sdk3cam.ATFloat()
+
+        self.AOIBinning = sdk3cam.ATEnum()
+        self.AOIHBin = sdk3cam.ATInt()
+        self.AOIVBin = sdk3cam.ATInt()
 
         self.AccumulateCount = sdk3cam.ATInt()
         self.BaselineLevel = sdk3cam.ATInt()

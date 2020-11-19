@@ -36,7 +36,7 @@ def basicNeoTest(nframe, nbuffer):
     from pymodaq_plugins_andor.hardware.andor_sdk3 import sdk3cam
     # %%
     logging.info('Initialising Camera')
-    cam = andor.AndorNeo(0, nbuffer)
+    cam = andor.AndorCamera(0, nbuffer)
     sdk3cam.camReg.regCamera()
     cam.init_camera()
 

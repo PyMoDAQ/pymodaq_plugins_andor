@@ -54,18 +54,19 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         {'title': 'Camera Settings:', 'name': 'camera_settings', 'type': 'group', 'children': [
             {'title': 'Camera Models:', 'name': 'camera_model', 'type': 'list', 'values': camera_list},
             {'title': 'Exposure (ms):', 'name': 'exposure', 'type': 'float', 'value': 0.01, 'default': 0.01, 'min': 0},
-            {'title': 'Image size:', 'name': 'image_size', 'type': 'group', 'children': [
+            {'title': 'Sensor size:', 'name': 'image_size', 'type': 'group', 'children': [
                 {'title': 'Nx:', 'name': 'Nx', 'type': 'int', 'value': 0, 'default': 0, 'readonly': True},
                 {'title': 'Ny:', 'name': 'Ny', 'type': 'int', 'value': 0, 'default': 0, 'readonly': True},
                 ]},
-            {'title': 'Image Settings:', 'name': 'image_settings', 'type': 'group', 'children': [
+            {'title': 'Encoding:', 'name': 'encoding', 'type': 'list', 'values': []},
+            {'title': 'Image Area:', 'name': 'image_settings', 'type': 'group', 'children': [
                 {'title': 'Binning:', 'name': 'binning', 'type': 'list', 'values': []},
                 {'title': 'Binning along x:', 'name': 'bin_x', 'type': 'int', 'value': 1, 'default': 1, 'min': 1},
                 {'title': 'Binning along y:', 'name': 'bin_y', 'type': 'int', 'value': 1, 'default': 1, 'min': 1},
-                {'title': 'Start x:', 'name': 'im_startx', 'type': 'int', 'value': 1, 'default': 1, 'min': 0},
-                {'title': 'End x:', 'name': 'im_endx', 'type': 'int', 'value': 1024, 'default': 1024, 'min': 0},
-                {'title': 'Start y:', 'name': 'im_starty', 'type': 'int', 'value': 1, 'default': 1, 'min': 1},
-                {'title': 'End y:', 'name': 'im_endy', 'type': 'int', 'value': 256, 'default': 256, 'min': 1, },
+                {'title': 'Left:', 'name': 'im_left', 'type': 'int', 'value': 1, 'default': 1, 'min': 1},
+                {'title': 'Top:', 'name': 'im_top', 'type': 'int', 'value': 1024, 'default': 1024, 'min': 1},
+                {'title': 'Width (in binned pxls):', 'name': 'im_width', 'type': 'int', 'value': 1024, 'min': 1},
+                {'title': 'Height (in binned pxls):', 'name': 'im_height', 'type': 'int', 'value': 256, 'min': 1, },
                 ]},
             ]},
         {'title': 'Shutter Settings:', 'name': 'shutter', 'type': 'group', 'children': [
@@ -126,35 +127,53 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             #     self.update_read_mode()
 
             elif param.name() == 'exposure':
-                self.controller.SetIntegTime(self.settings.child('camera_settings', 'exposure').value() / 1000)  # time should be in s
-                self.settings.child('camera_settings', 'exposure').setValue(self.controller.GetIntegTime() * 1000)
+                self.controller.SetIntegTime(self.settings.child('camera_settings', 'exposure').value())
+                self.settings.child('camera_settings', 'exposure').setValue(self.controller.GetIntegTime())
                 QtWidgets.QApplication.processEvents()
 
-            elif param.name() in custom_parameter_tree.iter_children(self.settings.child('camera_settings', 'shutter'),
+            elif param.name() == 'encoding':
+                self.controller.SimplePreAmpGainControl.setString(param.value())
+
+            elif param.name() in custom_parameter_tree.iter_children(self.settings.child('shutter'),
                                                                      []):
                 self.set_shutter()
 
             elif param.name() in custom_parameter_tree.iter_children(
                     self.settings.child('camera_settings', 'image_settings')):
                 if param.name() == 'binning': #if binning set from the preselection, update first the binx and biny values before setting the image area
+                    self.controller.AOIBinning.setString(param.value())
                     self.settings.child('camera_settings', 'image_settings', 'bin_x').setValue(
                         self.controller.AOIHBin.getValue())
                     self.settings.child('camera_settings', 'image_settings', 'bin_y').setValue(
                         self.controller.AOIVBin.getValue())
+                    self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(
+                        self.controller.AOIWidth.getValue())
+                    self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(
+                        self.controller.AOIHeight.getValue())
+
+                if param.name() == 'bin_x':
+                    self.controller.AOIHBin.setValue(param.value())
+                    self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(
+                        self.controller.AOIWidth.getValue())
+                if param.name() == 'bin_y':
+                    self.controller.AOIVBin.setValue(param.value())
+                    self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(
+                        self.controller.AOIHeight.getValue())
+
                 self.set_image_area()
+                self.setup_image()
 
             elif param.name() in custom_parameter_tree.iter_children(
-                    self.settings.child('camera_settings', 'temperature_settings')):
+                    self.settings.child('temperature_settings')):
                 self.setup_temperature()
 
             pass
-
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
 
 
-    def emit_data(self):
+    def emit_data(self, buffer_pointer):
         """
             Fonction used to emit data obtained by callback.
 
@@ -163,13 +182,22 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             daq_utils.ThreadCommand
         """
         try:
+
+            if not self.buffer.ctypes.data == buffer_pointer:
+                raise RuntimeError('Returned buffer not equal to expected buffer')
+
             self.ind_grabbed += 1
-            sizey = self.settings.child('camera_settings', 'image_size', 'Ny').value()
-            sizex = self.settings.child('camera_settings', 'image_size', 'Nx').value()
-            self.controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
+            Ny = self.settings.child('camera_settings', 'image_size', 'Ny').value()
+            Nx = self.settings.child('camera_settings', 'image_size', 'Nx').value()
+
+            data = self.controller.get_image_fom_buffer(Nx, Ny, self.buffer)
+            # self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
+            #                                               data=[np.squeeze(data)],
+            #                                               dim=self.data_shape)])
+
             self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
                                                           data=[np.squeeze(
-                                                              self.data.reshape((sizey, sizex)).astype(np.float))],
+                                                              data.reshape((Ny, Nx)).astype(np.float))],
                                                           dim=self.data_shape)])
             QtWidgets.QApplication.processEvents()  # here to be sure the timeevents are executed even if in continuous grab mode
 
@@ -190,16 +218,28 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             limits=(self.controller.AOIHBin.min(), self.controller.AOIHBin.max()))
         self.settings.child('camera_settings', 'image_settings', 'bin_y').setOpts(
             limits=(self.controller.AOIVBin.min(), self.controller.AOIVBin.max()))
-
+        self.settings.child('camera_settings', 'image_settings', 'im_left').setOpts(
+            limits=(self.controller.AOILeft.min(), self.controller.AOILeft.max()))
+        self.settings.child('camera_settings', 'image_settings', 'im_top').setOpts(
+            limits=(self.controller.AOITop.min(), self.controller.AOITop.max()))
+        self.settings.child('camera_settings', 'image_settings', 'im_width').setOpts(
+            limits=(self.controller.AOIWidth.min(), self.controller.AOIWidth.max()))
+        self.settings.child('camera_settings', 'image_settings', 'im_height').setOpts(
+            limits=(self.controller.AOIHeight.min(), self.controller.AOIHeight.max()))
 
     def set_image_area(self):
 
-        binx = self.settings.child('camera_settings', 'image_settings', 'bin_x').value()
-        biny = self.settings.child('camera_settings', 'image_settings', 'bin_y').value()
-        startx = self.settings.child('camera_settings', 'image_settings', 'im_startx').value()
-        endx = self.settings.child('camera_settings', 'image_settings', 'im_endx').value()
-        starty = self.settings.child('camera_settings', 'image_settings', 'im_starty').value()
-        endy = self.settings.child('camera_settings', 'image_settings', 'im_endy').value()
+        left = self.settings.child('camera_settings', 'image_settings', 'im_left').value()
+        top = self.settings.child('camera_settings', 'image_settings', 'im_top').value()
+        width = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
+        height = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
+
+        # first set width and height as it modifies the possible top and left
+        self.controller.AOIWidth.setValue(width)
+        self.controller.AOIHeight.setValue(height)
+        self.controller.AOITop.setValue(top)
+        self.controller.AOILeft.setValue(left)
+
 
         # err = self.controller.SetImage(binx, biny, startx, endx, starty, endy)
         # if err == 'DRV_SUCCESS':
@@ -235,7 +275,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                     self.controller = controller
             else:
                 model = self.settings.child('camera_settings', 'camera_model')
-                self.controller = api.AndorNeo(model.opts['limits'].index(model.value()))
+                self.controller = api.AndorCamera(model.opts['limits'].index(model.value()))
 
             self.ini_camera()
 
@@ -282,15 +322,20 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         sdk3cam.camReg.regCamera()
         self.controller.init_camera()
 
+        if not self.controller.FullAOIControl.getValue():
+            self.settings.child('camera_settings', 'image_settings').opts(readonly=True)
+
+        self.settings.child('camera_settings', 'encoding').setOpts(
+            limits=self.controller.SimplePreAmpGainControl.getAvailableValues())
+        self.settings.child('camera_settings', 'encoding').setValue(self.controller.SimplePreAmpGainControl.getString())
+
 
         # %%%%%% Get image size and current binning
         self.SIZEX, self.SIZEY = self.controller.GetCCDWidth(), self.controller.GetCCDHeight()
-        self.settings.child('camera_settings', 'image_settings', 'im_endy').setValue(self.SIZEY)
-        self.settings.child('camera_settings', 'image_settings',
-                            'im_endy').setOpts(max=self.SIZEY, default=self.SIZEY)
-        self.settings.child('camera_settings', 'image_settings', 'im_endx').setValue(self.SIZEX)
-        self.settings.child('camera_settings', 'image_settings',
-                            'im_endx').setOpts(max=self.SIZEX, default=self.SIZEX)
+        self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(self.SIZEY)
+        self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(self.SIZEX)
+        self.settings.child('camera_settings', 'image_settings', 'im_left').setValue(1)
+        self.settings.child('camera_settings', 'image_settings', 'im_top').setValue(1)
         self.settings.child('camera_settings', 'image_size', 'Nx').setOpts(max=self.SIZEX, default=self.SIZEX, value=self.SIZEX)
         self.settings.child('camera_settings', 'image_size', 'Ny').setOpts(max=self.SIZEY, default=self.SIZEY, value=self.SIZEY)
         #
@@ -313,19 +358,15 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
         self.setup_shutter()
 
+        callback = AndorCallback(self.controller.wait_buffer)
+        self.callback_thread = QtCore.QThread()
+        callback.moveToThread(self.callback_thread)
+        callback.data_sig.connect(
+            self.emit_data)  # when the wait for acquisition returns (with data taken), emit_data will be fired
 
-
-
-
-        # callback = AndorCallback(self.controller.WaitForAcquisition)
-        # self.callback_thread = QtCore.QThread()
-        # callback.moveToThread(self.callback_thread)
-        # callback.data_sig.connect(
-        #     self.emit_data)  # when the wait for acquisition returns (with data taken), emit_data will be fired
-        #
-        # self.callback_signal.connect(callback.wait_for_acquisition)
-        # self.callback_thread.callback = callback
-        # self.callback_thread.start()
+        self.callback_signal.connect(callback.wait_for_acquisition)
+        self.callback_thread.callback = callback
+        self.callback_thread.start()
 
     def setup_shutter(self):
         modes = self.controller.ShutterMode.getAvailableValues()
@@ -385,22 +426,31 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         return self.y_axis
 
     def prepare_data(self):
-        sizex = self.settings.child('camera_settings', 'image_size', 'Nx').value()
-        sizey = self.settings.child('camera_settings', 'image_size', 'Ny').value()
+
+        bufSize = self.controller.ImageSizeBytes.getValue()
+
+        sizex = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
+        sizey = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
 
         # %%%%%% Initialize data: self.data for the memory to store new data and self.data_average to store the average data
         image_size = sizex * sizey
+
         self.data = np.zeros((image_size,), dtype=np.long)
-        self.data_pointer = self.data.ctypes.data_as(ctypes.c_void_p)
+
+        self.buffer = np.empty(bufSize, 'uint8')
+        self.buffer_pointer = self.buffer.ctypes.data
+
+        self.controller.queue_single_buffer(self.buffer)
 
         data_shape = 'Data2D' if sizey != 1 else 'Data1D'
         if data_shape != self.data_shape:
             self.data_shape = data_shape
             # init the viewers
-            self.data_grabed_signal_temp.emit([DataFromPlugins(name='Camera ',
-                                                               data=[np.squeeze(
-                                                                   self.data.reshape((sizey, sizex)).astype(np.float))],
-                                                               dim=self.data_shape)])
+            self.data_grabed_signal_temp.emit([DataFromPlugins(
+                name=self.settings.child('camera_settings', 'camera_model').value(),
+                data=[np.squeeze(self.data.reshape((sizey, sizex)).astype(np.float))], dim=self.data_shape)])
+
+        return sizex, sizey
 
     def grab_data(self, Naverage=1, **kwargs):
         """
@@ -419,24 +469,33 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         try:
             self.camera_done = False
-
+            self.temperature_timer.stop()
             self.ind_grabbed = 0  # to keep track of the current image in the average
             self.Naverage = Naverage  #
 
-            self.prepare_data()
-            if Naverage == 1:
-                self.controller.SetAcquisitionMode(1)
-            else:
-                self.controller.SetAcquisitionMode(2)
-                self.controller.SetNumberAccumulations(Naverage)
+            Nx, Ny = self.prepare_data()
 
-            self.controller.SetExposureTime(
-                self.settings.child('camera_settings', 'exposure').value() / 1000)  # temp should be in s
-            (err, timings) = self.controller.GetAcquisitionTimings()
-            self.settings.child('camera_settings', 'exposure').setValue(timings['exposure'] * 1000)
-            # %%%%% Start acquisition with the given exposure in ms, in "1d" or "2d" mode
-            self.controller.StartAcquisition()
+
+            # if Naverage == 1:
+            #     self.controller.SetAcquisitionMode(1)
+            # else:
+            #     self.controller.SetAcquisitionMode(2)
+            #     self.controller.SetNumberAccumulations(Naverage)
+            #
+
+            self.controller.AcquisitionStart()
             self.callback_signal.emit()  # will trigger the waitfor acquisition
+
+
+
+
+            # self.controller.AcquisitionStop()
+            # self.controller._flush()
+            #
+            # data = self.controller.get_image_fom_buffer(Nx, Ny, buffer)
+            # self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
+            #                                               data=[np.squeeze(data)],
+            #                                               dim=self.data_shape)])
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), "log"]))
@@ -446,9 +505,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             stop the camera's actions.
         """
         try:
-            self.controller.CancelWait()  # first cancel the waitacquistion (if any)
-            QtWidgets.QApplication.processEvents()
-            self.controller.AbortAcquisition()  # abor the camera actions
+            self.controller.AcquisitionStop()
+            self.temperature_timer.start(2000)
 
 
         except:
@@ -460,14 +518,12 @@ class AndorCallback(QtCore.QObject):
     """
 
     """
-    data_sig = QtCore.pyqtSignal()
+    data_sig = QtCore.pyqtSignal(int)
 
     def __init__(self, wait_fn):
         super(AndorCallback, self).__init__()
         self.wait_fn = wait_fn
 
     def wait_for_acquisition(self):
-        err = self.wait_fn()
-
-        if err != 'DRV_NO_NEW_DATA':  # will be returned if the main thread called CancelWait
-            self.data_sig.emit()
+        pData = self.wait_fn()
+        self.data_sig.emit(pData)

@@ -552,17 +552,19 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             pass
         return ""
 
+
 class AndorCallback(QtCore.QObject):
     """
 
     """
-    data_sig=QtCore.pyqtSignal()
-    def __init__(self,wait_fn):
+    data_sig = QtCore.pyqtSignal()
+
+    def __init__(self, wait_fn):
         super(AndorCallback, self).__init__()
         self.wait_fn = wait_fn
 
     def wait_for_acquisition(self):
         err = self.wait_fn()
 
-        if err != 'DRV_NO_NEW_DATA': #will be returned if the main thread called CancelWait
+        if err != 'DRV_NO_NEW_DATA':  # will be returned if the main thread called CancelWait
             self.data_sig.emit()

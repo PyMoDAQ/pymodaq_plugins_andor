@@ -261,8 +261,6 @@ def dllFunc(name, args=[], argnames=[], lib='ATCORE'):
 dllFunc('AT_InitialiseLibrary')
 dllFunc('AT_FinaliseLibrary')
 
-dllFunc('AT_RegisterFeatureCallback', [AT_H, STRING, FeatureCallback])
-
 dllFunc('AT_Open', [c_int, OUTPUT(AT_H)])
 dllFunc('AT_Close', [AT_H])
 

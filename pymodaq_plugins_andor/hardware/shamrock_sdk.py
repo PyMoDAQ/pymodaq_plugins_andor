@@ -1,11 +1,10 @@
 import ctypes
 from ctypes import windll, c_int, c_char, byref, c_long, \
     pointer, c_float, c_char_p, cdll
-from PIL import Image
+
 import sys
-import time
 import platform
-import os
+
 from pathlib import Path
 
 class ShamrockSDK():

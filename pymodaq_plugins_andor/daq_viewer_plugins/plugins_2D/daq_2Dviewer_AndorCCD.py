@@ -1,6 +1,7 @@
 import numpy as np
 from enum import IntEnum
 import ctypes
+from ctypes.util import find_library
 import platform
 from PyQt5 import QtWidgets, QtCore
 from easydict import EasyDict as edict
@@ -9,19 +10,19 @@ from pymodaq.daq_viewer.utility_classes import DAQ_Viewer_base
 from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis
 from pymodaq.daq_viewer.utility_classes import comon_parameters
 from pymodaq_plugins_andor.hardware.andor_sdk2 import sdk2
-from pymodaq.daq_utils import custom_parameter_tree
+from pymodaq.daq_utils.parameter.utils import iter_children
 
 import sys
 
 is_64bits = sys.maxsize > 2 ** 32
 
 if platform.system() == "Linux":
-    libpath = ctypes.util.find_library('libandor')  # to be checked
+    libpath = find_library('libandor')  # to be checked
 elif platform.system() == "Windows":
     if is_64bits:
-        libpath = ctypes.util.find_library('atmcd64d')
+        libpath = find_library('atmcd64d')
     else:
-        libpath = ctypes.util.find_library('atmcd32d')
+        libpath = find_library('atmcd32d')
 
 class Andor_Camera_ReadOut(IntEnum):
     """
@@ -172,7 +173,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             if param.name() == 'set_point':
                 self.controller.SetTemperature(param.value())
 
-            elif param.name() == 'readout' or param.name() in custom_parameter_tree.iter_children(self.settings.child('camera_settings', 'readout_settings')):
+            elif param.name() == 'readout' or param.name() in iter_children(self.settings.child('camera_settings', 'readout_settings')):
                 self.update_read_mode()
                 
             elif param.name() == 'exposure':
@@ -182,11 +183,11 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                 QtWidgets.QApplication.processEvents()
                 self.get_exposure_ms()
 
-            elif param.name() in custom_parameter_tree.iter_children(self.settings.child('camera_settings', 'shutter'), []):
+            elif param.name() in iter_children(self.settings.child('camera_settings', 'shutter'), []):
                 self.set_shutter()
 
-            elif param.name() in custom_parameter_tree.iter_children(self.settings.child('camera_settings', 'readout_settings','image_settings')):
-                if self.settings.child( 'camera_settings', 'readout').value() == 'Image':
+            elif param.name() in iter_children(self.settings.child('camera_settings', 'readout_settings', 'image_settings')):
+                if self.settings.child('camera_settings', 'readout').value() == 'Image':
                     self.set_image_area()
 
             pass

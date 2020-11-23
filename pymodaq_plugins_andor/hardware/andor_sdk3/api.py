@@ -200,7 +200,7 @@ class AndorBase(sdk3cam.SDK3Camera):
 
     def wait_buffer(self):
         try:
-            pData, lData = sdk3.WaitBuffer(self.handle, 100)
+            pData, lData = sdk3.WaitBuffer(self.handle, sdk3.AT_INFINITE)
         except sdk3.TimeoutError as e:
             return
         except sdk3.CameraError as e:

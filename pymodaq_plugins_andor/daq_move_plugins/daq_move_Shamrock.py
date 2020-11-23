@@ -1,17 +1,14 @@
 import sys
 import numpy as np
-from enum import IntEnum
 import ctypes
 import platform
-from PyQt5 import QtWidgets, QtCore
 from easydict import EasyDict as edict
 from pymodaq.daq_move.utility_classes import DAQ_Move_base, comon_parameters
-from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis
-from pymodaq.daq_utils import custom_parameter_tree
+from pymodaq.daq_utils.daq_utils import ThreadCommand
 from ..hardware.shamrock_sdk import ShamrockSDK
 from pathlib import Path
 
-is_64bits = sys.maxsize > 2**32
+is_64bits = sys.maxsize > 2 ** 32
 
 if platform.system() == "Linux":
     libpath = ctypes.util.find_library('libandor')  # to be checked
@@ -26,6 +23,7 @@ elif platform.system() == "Windows":
             libpath = Path(libpath).joinpath('Shamrock')
 if libpath is None:
     libpath = ""
+
 
 class DAQ_Move_Shamrock(DAQ_Move_base):
     """
@@ -65,7 +63,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
         super().__init__(parent, params_state)  # initialize base class with commom attributes and methods
 
-    def commit_settings(self,param):
+    def commit_settings(self, param):
         """
             | Activate parameters changes on the hardware from parameter's name.
             |
@@ -85,10 +83,10 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
             if param.name() == 'grating':
                 index_grating = self.grating_list.index(param.value())
                 self.get_set_grating(index_grating)
-                self.set_wavelength(self.settings.child('spectro_settings','spectro_wl').value())
+                self.set_wavelength(self.settings.child('spectro_settings', 'spectro_wl').value())
 
             elif param.name() == 'spectro_wl':
-                 self.set_wavelength(param.value())
+                self.set_wavelength(param.value())
 
             elif param.name() == 'zero_order':
                 if param.value():
@@ -116,7 +114,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
             self.settings.child('spectro_settings', 'spectro_wl').setValue(wl)
         return wl
 
-
     def ini_stage(self, controller=None):
         """Actuator communication initialization
 
@@ -135,7 +132,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         try:
             self.emit_status(ThreadCommand('show_splash', ["Initialising Shamrock"]))
             if self.settings.child(('controller_status')).value() == "Slave":
-                if controller is None: 
+                if controller is None:
                     raise Exception('no controller has been defined externally while this detector is a slave one')
                 else:
                     self.controller = controller
@@ -174,8 +171,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
         self.get_set_grating(ind_grating - 1)
 
-
-
     def check_position(self):
         """Get the current position from the hardware with scaling conversion.
 
@@ -187,7 +182,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         ##
 
         pos = self.get_position_with_scaling(pos)
-        self.emit_status(ThreadCommand('check_position',[pos]))
+        self.emit_status(ThreadCommand('check_position', [pos]))
         return pos
 
     def move_Abs(self, position):
@@ -198,17 +193,15 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         position: (flaot) value of the absolute target positioning
         """
 
-        position = self.check_bound(position)  #if user checked bounds, the defined bounds are applied here
+        position = self.check_bound(position)  # if user checked bounds, the defined bounds are applied here
         position = self.set_position_with_scaling(position)  # apply scaling if the user specified one
 
         self.set_wavelength(position)
-        self.emit_status(ThreadCommand('Update_Status',['Some info you want to log']))
+        self.emit_status(ThreadCommand('Update_Status', ['Some info you want to log']))
         ##############################
 
-
-
         self.target_position = position
-        self.poll_moving()  #start a loop to poll the current actuator value and compare it with target position
+        self.poll_moving()  # start a loop to poll the current actuator value and compare it with target position
 
     def move_Rel(self, position):
         """ Move the actuator to the relative target actuator value defined by position
@@ -217,13 +210,12 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         ----------
         position: (flaot) value of the relative target positioning
         """
-        position = self.check_bound(self.current_position+position)-self.current_position
+        position = self.check_bound(self.current_position + position) - self.current_position
         self.target_position = position + self.current_position
-
 
         self.set_wavelength(self.target_position)
 
-        self.emit_status(ThreadCommand('Update_Status',['Some info you want to log']))
+        self.emit_status(ThreadCommand('Update_Status', ['Some info you want to log']))
         ##############################
 
         self.poll_moving()
@@ -248,7 +240,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         self.move_done()  # to let the interface know the actuator stopped. Direct call as the setwavelength call is
         # blocking anyway
 
-
     def get_set_grating(self, ind_grating):
         """
         set the current grating to ind_grating+1. ind_grating corresponds to the index in the GUI graitng list while the SDK index starts at 1...
@@ -268,7 +259,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
         if err == "SHAMROCK_SUCCESS":
             self.settings.child('spectro_settings', 'spectro_wl').setOpts(limits=(wl_min, wl_max),
-                                tip=f'Possible values are within {wl_min} and {wl_max} for the selected grating')
+                                                                          tip=f'Possible values are within {wl_min} and {wl_max} for the selected grating')
 
         self.emit_status(ThreadCommand('close_splash'))
 

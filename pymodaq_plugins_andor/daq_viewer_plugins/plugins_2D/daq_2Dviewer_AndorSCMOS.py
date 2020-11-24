@@ -43,10 +43,11 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         --------
         utility_classes.DAQ_Viewer_base
     """
-    start_waitloop = QtCore.pyqtSignal()
+    start_waitloop = QtCore.pyqtSignal(int, int)
     stop_waitloop = QtCore.pyqtSignal()
 
     hardware_averaging = True  # will use the accumulate acquisition mode if averaging is neccessary
+    live_mode_available = True
     params = comon_parameters + [
         {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': libpath},
 
@@ -89,12 +90,14 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
         self.buffers = []
         self.buffers_pointer = []
-        self.Nbuffers = 10
+        self.Nbuffers = 5
         self.refresh_time = 0.2
 
         self.current_buffer = -1
-        self.grabed_data = None
+        self.n_grabed_data = None
         self.start_time = None
+        self.live = False
+        self.wait_time = 0
 
         self.x_axis = None
         self.y_axis = None
@@ -127,6 +130,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
         """
         try:
+            self.stop()
+            QtWidgets.QApplication.processEvents()
+
             if param.name() == 'set_point':
                 self.controller.SetTemperature(param.value())
 
@@ -135,9 +141,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             #     self.update_read_mode()
 
             elif param.name() == 'exposure':
-                self.controller.SetIntegTime(self.settings.child('camera_settings', 'exposure').value())
-                self.settings.child('camera_settings', 'exposure').setValue(self.controller.GetIntegTime())
-                QtWidgets.QApplication.processEvents()
+                self.controller.ExposureTime.setValue(self.settings.child('camera_settings', 'exposure').value() * 1e-3)
+                self.settings.child('camera_settings', 'exposure').setValue(
+                    self.controller.ExposureTime.getValue() * 1e3)
 
             elif param.name() == 'encoding':
                 self.controller.SimplePreAmpGainControl.setString(param.value())
@@ -154,11 +160,6 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                         self.controller.AOIHBin.getValue())
                     self.settings.child('camera_settings', 'image_settings', 'bin_y').setValue(
                         self.controller.AOIVBin.getValue())
-
-                    # self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(
-                    #     self.controller.AOIWidth.getValue())
-                    # self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(
-                    #     self.controller.AOIHeight.getValue())
                     QtWidgets.QApplication.processEvents()
 
                 if param.name() == 'bin_x':
@@ -210,34 +211,46 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         try:
             self.current_buffer += 1
-            self.grabed_data += 1
+            self.n_grabed_data += 1
+            print(f'ind_grabemit:{self.n_grabed_data}')
             self.current_buffer = self.current_buffer % self.Nbuffers
+            print(f'ind_current_buffer:{self.current_buffer}')
 
-            if not self.buffers[self.current_buffer].ctypes.data == buffer_pointer[0]:
-                 raise RuntimeError('Returned buffer not equal to expected buffer')
+            if self.buffers[self.current_buffer].ctypes.data != buffer_pointer[0]:
+                raise RuntimeError('Returned buffer not equal to expected buffer')
 
-            print(self.grabed_data)
-            Ny = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
-            Nx = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
+            Nx = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
+            Ny = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
+            data = self.controller.get_image_fom_buffer(Nx, Ny, self.buffers[self.current_buffer]).T
+            cam_name = self.settings.child('camera_settings', 'camera_model').value()
 
+            if self.n_grabed_data % self.Naverage == 0:
+                self.data = 1 / self.Naverage * data
+            else:
+                self.data += 1 / self.Naverage * data
 
-            data = self.controller.get_image_fom_buffer(Nx, Ny, self.buffers[self.current_buffer])
-            if (perf_counter()-self.start_time) > self.refresh_time:
-                cam_name = self.settings.child('camera_settings', 'camera_model').value()
-                self.data_grabed_signal_temp.emit([DataFromPlugins(name=cam_name,
-                                                              data=[np.squeeze(
-                                                                  data.reshape((Ny, Nx)).astype(np.float))],
-                                                              dim=self.data_shape)])
+            if not self.live:
+                if self.n_grabed_data > self.Naverage:
+                    self.stop()
+                else:
+                    self.data += 1 / self.Naverage * data
+                    if self.n_grabed_data == self.Naverage:
+                        self.data_grabed_signal.emit([
+                            DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
 
-                self.start_time = perf_counter()
+                    elif self.n_grabed_data < self.Naverage:
+                        self.data_grabed_signal_temp.emit([
+                            DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
+            else:
+                if self.n_grabed_data % self.Naverage == 0:
+                    self.data_grabed_signal.emit([
+                        DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
+                else:
+                    self.data_grabed_signal_temp.emit([
+                        DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
 
-            #QtWidgets.QApplication.processEvents()
             self.controller.queue_single_buffer(self.buffers[self.current_buffer])
-              # here to be sure the timeevents are executed even if in continuous grab mode
-            self.start_waitloop.emit()
 
-
-        # self.controller.queue_single_buffer(self.buffer)
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
@@ -277,14 +290,6 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.controller.AOIHeight.setValue(height)
         self.controller.AOITop.setValue(top)
         self.controller.AOILeft.setValue(left)
-
-
-        # err = self.controller.SetImage(binx, biny, startx, endx, starty, endy)
-        # if err == 'DRV_SUCCESS':
-        #     self.settings.child('camera_settings', 'image_size', 'Nx').setValue(int((endx - startx + 1) / binx))
-        #     self.settings.child('camera_settings', 'image_size', 'Ny').setValue(int((endy - starty + 1) / biny))
-        #
-        # return err
 
     def ini_detector(self, controller=None):
         """
@@ -367,7 +372,6 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             limits=self.controller.SimplePreAmpGainControl.getAvailableValues())
         self.settings.child('camera_settings', 'encoding').setValue(self.controller.SimplePreAmpGainControl.getString())
 
-
         # %%%%%% Get image size and current binning
         self.SIZEX, self.SIZEY = self.controller.GetCCDWidth(), self.controller.GetCCDHeight()
         self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(self.SIZEY)
@@ -393,8 +397,14 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                                                             readonly=self.controller.TemperatureControl.isReadonly())
         self.setup_temperature()
 
-
         self.setup_shutter()
+
+        self.setup_callback()
+
+    def setup_callback(self):
+        if self.callback_thread is not None:
+            if self.callback_thread.isRunning():
+                self.callback_thread.terminate()
 
         callback = AndorCallback(self.controller.wait_buffer)
         self.callback_thread = QtCore.QThread()
@@ -417,7 +427,6 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
     def set_shutter(self):
         self.controller.ShutterMode.setString(self.settings.child('shutter', 'mode').value())
         self.controller.ShutterOutputMode.setString(self.settings.child('shutter', 'shutter_on_ext_trigger').value())
-
 
     def close(self):
         """
@@ -456,7 +465,6 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 Contains a vector of integer corresponding to the vertical camera pixels.
         """
         if self.controller is not None:
-
             Ny = self.settings.child('camera_settings', 'image_size', 'Ny').value()
             self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=np.int), label='Pixels')
             self.emit_y_axis()
@@ -464,9 +472,14 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             raise (Exception('Camera not defined'))
         return self.y_axis
 
+
+    def free_buffers(self):
+        # empty buffers if that was not the case
+        while len(self.buffers) != 0:
+            self.buffers.pop(0)
+
+
     def prepare_data(self):
-
-
         sizex = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
         sizey = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
         if sizex != self.controller.AOIWidth.getValue():
@@ -476,25 +489,25 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             logger.error("Memory size doesn't correspond to image size")
             return False
 
-
-        # %%%%%% Initialize data: self.data for the memory to store new data and self.data_average to store the average data
+        # %% Initialize data: self.data for the memory to store new data and self.data_average to store the average data
         image_size = sizex * sizey
-
-        self.data = np.zeros((image_size,), dtype=np.long)
+        self.data = np.zeros((sizey, sizex), dtype=np.float)
 
         bufSize = self.controller.ImageSizeBytes.getValue()
-        if not not self.buffers:
-            while len(self.buffers) != 0:
-                self.buffers.pop(0)
-            self.controller.flush()
 
-        self.buffers = []
-        self.buffers_pointer = []
+        if not self.buffers or self.buffers[0].size != bufSize:
+            if not not self.buffers:
+                self.free_buffers()
+                self.controller.flush()
 
-        for ind in range(self.Nbuffers):
-            self.buffers.append(zeros_aligned(bufSize, 8, 'uint8'))
-            self.buffers_pointer.append(self.buffers[-1].ctypes.data)
-            self.controller.queue_single_buffer(self.buffers[-1])
+            self.current_buffer = -1
+            self.buffers = []
+            self.buffers_pointer = []
+
+            for ind in range(self.Nbuffers):
+                self.buffers.append(zeros_aligned(bufSize, 8, 'uint8'))
+                self.buffers_pointer.append(self.buffers[-1].ctypes.data)
+                self.controller.queue_single_buffer(self.buffers[-1])
 
         data_shape = 'Data2D' if sizey != 1 else 'Data1D'
         if data_shape != self.data_shape:
@@ -502,7 +515,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             # init the viewers
             self.data_grabed_signal_temp.emit([DataFromPlugins(
                 name=self.settings.child('camera_settings', 'camera_model').value(),
-                data=[np.squeeze(self.data.reshape((sizey, sizex)).astype(np.float))], dim=self.data_shape)])
+                data=[np.squeeze(self.data.reshape((sizex, sizey)).astype(np.float))], dim=self.data_shape)])
 
         return True
 
@@ -523,42 +536,31 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         try:
             self.camera_done = False
-            self.current_buffer = -1
-            self.grabed_data = 0
+            self.Naverage = Naverage
+            if 'live' in kwargs:
+                self.live = kwargs['live']
+            if 'wait_time' in kwargs:
+                self.wait_time = kwargs['wait_time']
+
+            self.n_grabed_data = 0
             self.start_time = perf_counter()
             self.temperature_timer.stop()
 
-            self.Naverage = Naverage  #
+            if self.controller.CameraAcquiring.getValue():
+                self.controller.AcquisitionStop()
 
             self.set_image_area()
             status = self.prepare_data()
-
             if not status:
                 return
 
-            # if Naverage == 1:
-            #     self.controller.SetAcquisitionMode(1)
-            # else:
-            #     self.controller.SetAcquisitionMode(2)
-            #     self.controller.SetNumberAccumulations(Naverage)
-            #
-            if self.controller.CameraAcquiring.getValue():
-                self.controller.AcquisitionStop()
             self.controller.CycleMode.setString('Continuous')
+
             self.controller.AcquisitionStart()
-            self.start_waitloop.emit()  # will trigger the waitfor acquisition
-
-
-
-
-            # self.controller.AcquisitionStop()
-            # self.controller._flush()
-            #
-            # data = self.controller.get_image_fom_buffer(Nx, Ny, buffer)
-            # self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
-            #                                               data=[np.squeeze(data)],
-            #                                               dim=self.data_shape)])
-
+            if self.live:
+                    self.start_waitloop.emit(-1, self.wait_time)  # will trigger the waitfor acquisition
+            else:
+                self.start_waitloop.emit(Naverage, 0)  # will trigger the waitfor acquisition
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), "log"]))
 
@@ -568,10 +570,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         try:
             self.stop_waitloop.emit()
-            QtCore.QThread.msleep(100)
             if self.controller.CameraAcquiring.getValue():
                 self.controller.AcquisitionStop()
-            self.controller.flush()
+            QtWidgets.QApplication.processEvents()
             self.temperature_timer.start(2000)
 
 
@@ -591,16 +592,27 @@ class AndorCallback(QtCore.QObject):
         self.wait_fn = wait_fn
         self.running = False
 
-    def start(self):
+    def start(self, naverage, wait_time=0):
         self.running = True
-        self.wait_for_acquisition()
+
+        self.wait_for_acquisition(naverage, wait_time)
 
     def stop(self):
         self.running = False
 
-    def wait_for_acquisition(self):
-        pData = self.wait_fn()
-        if not not pData:
-            self.data_sig.emit([pData])
-
+    def wait_for_acquisition(self, naverage, wait_time):
+        ind_grab = 0
+        while True:
+            if naverage == -1:  # continuous grab
+                if not self.running:
+                    break
+            else:
+                if ind_grab >= naverage or not self.running:
+                    break
+            pData = self.wait_fn()
+            if not not pData:
+                ind_grab += 1
+                print(f'ind_grab_thread:{ind_grab}')
+                self.data_sig.emit([pData])
+                QtCore.QThread.msleep(wait_time)
 

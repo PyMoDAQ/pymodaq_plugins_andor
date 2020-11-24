@@ -200,7 +200,7 @@ class AndorBase(sdk3cam.SDK3Camera):
 
     def wait_buffer(self):
         try:
-            pData, lData = sdk3.WaitBuffer(self.handle, sdk3.AT_INFINITE)
+            pData, lData = sdk3.WaitBuffer(self.handle, 0)
         except sdk3.TimeoutError as e:
             return
         except sdk3.CameraError as e:
@@ -209,14 +209,14 @@ class AndorBase(sdk3cam.SDK3Camera):
             return
         return ctypes.addressof(pData.contents)
 
-    def get_image_fom_buffer(self, Nx, Ny, buffer):
+    def get_image_fom_buffer(self, Ny, Nx, buffer):
         data = np.empty((Ny, Nx), np.uint16)
 
         a_s = self.AOIStride.getValue()
         dt = self.PixelEncoding.getString()
         sdk3.ConvertBuffer(buffer.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
                            data.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
-                           Nx, Ny, a_s, dt, 'Mono16')
+                           Ny, Nx, a_s, dt, 'Mono16')
 
         return data
 

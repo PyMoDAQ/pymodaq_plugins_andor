@@ -69,12 +69,22 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 {'title': 'Height (in binned pxls):', 'name': 'im_height', 'type': 'int', 'value': 256, 'min': 1, },
                 {'title': 'Set Size Max:', 'name': 'max_size', 'type': 'bool_push', 'value': False,
                  'label': 'Max'},
+                {'title': 'Readout time (ms):', 'name': 'readout_time', 'type': 'float', 'value': 0., 'readonly': True},
                 ]},
             ]},
+
+        {'title': 'Trigger Settings:', 'name': 'trigger', 'type': 'group', 'children': [
+            {'title': 'Mode:', 'name': 'trigger_mode', 'type': 'list', 'values': []},
+            {'title': 'Software Trigger:', 'name': 'soft_trigger', 'type': 'bool_push', 'value': False,
+             'label': 'Fire'},
+            {'title': 'External Trigger delay (ms):', 'name': 'ext_trigger_delay', 'type': 'float', 'value': 0.},
+        ]},
+
         {'title': 'Shutter Settings:', 'name': 'shutter', 'type': 'group', 'children': [
-            {'title': 'Mode:', 'name': 'mode', 'type': 'list', 'values': []},
+            {'title': 'Mode:', 'name': 'shutter_mode', 'type': 'list', 'values': []},
             {'title': 'External Trigger is:', 'name': 'shutter_on_ext_trigger', 'type': 'list', 'values': []},
             ]},
+
 
         {'title': 'Temperature Settings:', 'name': 'temperature_settings', 'type': 'group', 'children': [
             {'title': 'Enable Cooling:', 'name': 'enable_cooling', 'type': 'bool', 'value': True},
@@ -136,10 +146,6 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             if param.name() == 'set_point':
                 self.controller.SetTemperature(param.value())
 
-            # elif param.name() == 'readout' or param.name() in iter_children(
-            #         self.settings.child('camera_settings', 'readout_settings')):
-            #     self.update_read_mode()
-
             elif param.name() == 'exposure':
                 self.controller.ExposureTime.setValue(self.settings.child('camera_settings', 'exposure').value() * 1e-3)
                 self.settings.child('camera_settings', 'exposure').setValue(
@@ -148,12 +154,10 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             elif param.name() == 'encoding':
                 self.controller.SimplePreAmpGainControl.setString(param.value())
 
-            elif param.name() in iter_children(self.settings.child('shutter'),
-                                                                     []):
+            elif param.name() in iter_children(self.settings.child('shutter'), []):
                 self.set_shutter()
 
-            elif param.name() in iter_children(
-                    self.settings.child('camera_settings', 'image_settings')):
+            elif param.name() in iter_children(self.settings.child('camera_settings', 'image_settings'), []):
                 if param.name() == 'binning': #if binning set from the preselection, update first the binx and biny values before setting the image area
                     self.controller.AOIBinning.setString(param.value())
                     self.settings.child('camera_settings', 'image_settings', 'bin_x').setValue(
@@ -190,15 +194,27 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 QtWidgets.QApplication.processEvents()
                 #self.set_image_area()
 
-
-            elif param.name() in iter_children(
-                    self.settings.child('temperature_settings')):
+            elif param.name() in iter_children(self.settings.child('temperature_settings'), []):
                 self.setup_temperature()
 
-            pass
+            elif param.name() == 'soft_trigger':
+                if param.value():
+                    self.controller.SoftwareTrigger()
+                    param.setValue(False)
+
+            elif param.name() in iter_children(self.settings.child('trigger'), []):
+                self.set_trigger()
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
+
+    def set_trigger(self):
+        self.controller.TriggerMode.setString(self.settings.child('trigger', 'trigger_mode').value())
+        if 'External' in self.controller.TriggerMode.getString():
+            self.controller.ExternalTriggerDelay.setValue(
+                self.settings.child('trigger', 'ext_trigger_delay').value() / 1000)
+            self.settings.child('trigger',
+                                'ext_trigger_delay').setValue(self.controller.ExternalTriggerDelay.getValue() * 1000)
 
 
     def emit_data(self, buffer_pointer):
@@ -290,6 +306,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.controller.AOIHeight.setValue(height)
         self.controller.AOITop.setValue(top)
         self.controller.AOILeft.setValue(left)
+
+        self.settings.child('camera_settings', 'image_settings',
+                            'readout_time').setValue(self.controller.ReadoutTime.getValue() * 1000)
 
     def ini_detector(self, controller=None):
         """
@@ -397,6 +416,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                                                             readonly=self.controller.TemperatureControl.isReadonly())
         self.setup_temperature()
 
+        self.setup_trigger()
+
         self.setup_shutter()
 
         self.setup_callback()
@@ -417,15 +438,21 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.callback_thread.callback = callback
         self.callback_thread.start()
 
+    def setup_trigger(self):
+        self.settings.child('trigger', 'trigger_mode').setLimits(self.controller.TriggerMode.getAvailableValues())
+        self.settings.child('trigger', 'ext_trigger_delay').setLimits((self.controller.ExternalTriggerDelay.min(),
+                                                                       self.controller.ExternalTriggerDelay.max()))
+        self.set_trigger()
+
     def setup_shutter(self):
         modes = self.controller.ShutterMode.getAvailableValues()
         output_modes = self.controller.ShutterOutputMode.getAvailableValues()
-        self.settings.child('shutter', 'mode').setOpts(limits=modes)
+        self.settings.child('shutter', 'shutter_mode').setOpts(limits=modes)
         self.settings.child('shutter', 'shutter_on_ext_trigger').setOpts(limits=output_modes)
         self.set_shutter()
 
     def set_shutter(self):
-        self.controller.ShutterMode.setString(self.settings.child('shutter', 'mode').value())
+        self.controller.ShutterMode.setString(self.settings.child('shutter', 'shutter_mode').value())
         self.controller.ShutterOutputMode.setString(self.settings.child('shutter', 'shutter_on_ext_trigger').value())
 
     def close(self):

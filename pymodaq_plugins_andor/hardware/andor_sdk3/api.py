@@ -557,6 +557,7 @@ class AndorCamera(AndorBase):
         self.ActualExposureTime = sdk3cam.ATFloat()
         self.BurstRate = sdk3cam.ATFloat()
         self.ReadoutTime = sdk3cam.ATFloat()
+        self.ExternalTriggerDelay = sdk3cam.ATFloat()
 
         self.AOIBinning = sdk3cam.ATEnum()
         self.AOIHBin = sdk3cam.ATInt()

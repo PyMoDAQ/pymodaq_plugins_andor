@@ -46,12 +46,15 @@ if plat.startswith('Windows'):
         _stdcall_libraries['ATCORE'] = ctypes.windll.LoadLibrary('atcore')
         _stdcall_libraries['ATUTIL'] = ctypes.WinDLL('atutility')
     except OSError as e:
-        print('atcore and atutlity DLL not found')
-        print('Please add the directory containing them to the Path environment variable')
-        raise
+        raise OSError(f'Andor SCMOS atcore and atutlity DLL not found: {str(e)}')
+
 else:
-    _stdcall_libraries['ATCORE'] = ctypes.CDLL('atcore.so')
-    _stdcall_libraries['ATUTIL'] = ctypes.CDLL('atutility.so')
+    try:
+        _stdcall_libraries['ATCORE'] = ctypes.CDLL('atcore.so')
+        _stdcall_libraries['ATUTIL'] = ctypes.CDLL('atutility.so')
+    except OSError as e:
+        raise OSError(f'Andor SCMOS atcore and atutlity DLL not found: {str(e)}')
+
 
 # typedefs
 AT_H = ctypes.c_int

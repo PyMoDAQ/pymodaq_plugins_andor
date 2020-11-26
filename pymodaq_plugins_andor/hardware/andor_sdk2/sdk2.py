@@ -30,6 +30,7 @@ from ctypes import windll, c_int, c_char, byref, c_long, \
     pointer, c_float, c_char_p, cdll
 import sys
 import time
+from pathlib import Path
 import platform
 import os
 
@@ -45,10 +46,26 @@ The camera MUST be initialized before attempting to communicate
 with the Shamrock.
 
 """
+try:
+    # Check operating system and load library
+    if platform.system() == "Linux":
+        dllpath = Path("/usr/local/lib/libandor.so")
+        _dll = cdll.LoadLibrary(str(dllpath))
+    elif platform.system() == "Windows":
+        dllpath = Path('C:\\Program Files\\Andor SDK')
+        if platform.machine() == "AMD64":
+            dllname = "atmcd64d.dll"
+        else:
+            dllname = "atmcd32d.dll"
+        dllpath = dllpath.joinpath(dllname)
+        _dll = windll.LoadLibrary(str(dllpath))
 
+except Exception as e:
+    raise(f'Could not import Andor CDD library: {str(e)}')
+            
 
 # class AndorIdus(Instrument):
-class AndorSDK():
+class AndorSDK:
     """
     Andor class which is meant to provide the Python version of the same
     functions that are defined in the Andor's SDK. Extensive documentation
@@ -56,116 +73,74 @@ class AndorSDK():
     found in the Andor SDK Users Guide
     """
 
-    def __init__(self, dllpath=""):
-        '''
-        'C:\\Program Files\\Andor SDK'
-        
-        Loads and initializes the hardware driver.
-        Initializes local parameters
-
-        Input:
-            dllpath (string)   : The path where to find the sdk2 dlls
-        '''
-
-        self._dll = None
-
-        if not dllpath:
-            dllpath = 'C:\\Program Files\\Andor SDK'
-        try:
-            # Check operating system and load library
-            if platform.system() == "Linux":
-                dllname = "/usr/local/lib/libandor.so"
-                self._dll = cdll.LoadLibrary(dllname)
-            elif platform.system() == "Windows":
-                if platform.machine() == "AMD64":
-                    dllname = "atmcd64d"
-                else:
-                    dllname = "atmcd32d"
-                    self._dll = windll.LoadLibrary(dllname)
-            else:
-                print("Cannot detect operating system, will now stop")
-                raise Exception("Cannot detect operating system, will now stop")
-        except Exception as e:
-            raise Exception("error while initialising andor libraries. " + str(e))
-
+    def __init__(self):
+        """
+        """
+    @classmethod
+    def init_camera(cls):
         # Initialize the device
-
         tekst = c_char()
         print("Initializing iDus...", )
-        error = self._dll.Initialize(byref(tekst))
-        print("%s" % (ERROR_CODE[error]))
+        error = _dll.Initialize(byref(tekst))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
-        cw = c_int()
-        ch = c_int()
-        self._dll.GetDetector(byref(cw), byref(ch))
-
-        # Initiate parameters - iDus
-        self._width = cw.value
-        self._height = ch.value
-        self._temperature = None
-        self._set_T = None
-        self._gain = None
-        self._gainRange = None
-        self._status = ERROR_CODE[error]
-        self._verbosity = False
-        self._preampgain = None
-        self._channel = None
-        self._outamp = None
-        self._hsspeed = None
-        self._vsspeed = None
-        self._serial = None
-        self._model = None
-        self._exposure = None
-        self._accumulate = None
-        self._kinetic = None
-        self._bitDepths = []
-        self._preAmpGain = []
-        self._VSSpeeds = []
-        self._noGains = None
-        self._imageArray = []
-        self._noVSSpeeds = None
-        self._HSSpeeds = []
-        self._noADChannels = None
-        self._noHSSpeeds = None
-        self._ReadMode = None
 
     def __del__(self):
-        error = self._dll.ShutDown()
-        self._verbose(ERROR_CODE[error])
+        _dll.ShutDown()
 
     def close(self):
-        error = self._dll.ShutDown()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.ShutDown()
 
-    def _verbose(self, error):
-        '''
-        Reports all error codes to stdout if self._verbosity=True
+    # Manage camera
 
-        Input:
-            error (string)  : The string resulted from the error code
-            name (string)   : The name of the function calling the device
+    @classmethod
+    def GetAvailableCameras(cls):
+        Ncam = c_long()
+        error = _dll.GetAvailableCameras(byref(Ncam))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return Ncam.value
 
-        Output:
-            None
-        '''
-        if self._verbosity is True:
-            print("[%s]: %s" % (self.FUNC(1), error))
+    @classmethod
+    def GetCameraHandle(cls, index):
+        handle = c_long()
+        index = c_long(index)
+        error = _dll.GetCameraHandle(index, byref(handle))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return handle.value
 
-    def SetVerbose(self, state=True):
-        '''
-        Enable / disable printing error codes to stdout
+    @classmethod
+    def SetCurrentCamera(cls, handle):
+        handle = c_long(handle)
+        error = _dll.SetCurrentCamera(handle)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
-        Input:
-            state (bool)  : toggle verbosity, default=True
+    @classmethod
+    def GetCurrentCamera(cls):
+        handle = c_long()
+        error = _dll.GetCurrentCamera(byref(handle))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return handle.value
 
-        Output:
-            None
-        '''
-        self._verbosity = state
+    @classmethod
+    def GetCamerasInfo(cls):
+        cameralist = []
+        for ind in range(cls.GetAvailableCameras()):
+            handle = cls.GetCameraHandle(ind)
+            cls.SetCurrentCamera(handle)
+            cls.init_camera()
+            cameralist.append(dict(handle=handle,
+                                   serial=cls.GetCameraSerialNumber(),
+                                   model=cls.GetHeadModel()))
+        return cameralist
 
     # Get Camera properties
-
-    def GetCameraSerialNumber(self):
+    @classmethod
+    def GetCameraSerialNumber(cls):
         '''
         Returns the serial number of the camera
 
@@ -176,12 +151,13 @@ class AndorSDK():
             (int) : Serial number of the camera
         '''
         serial = c_int()
-        error = self._dll.GetCameraSerialNumber(byref(serial))
-        self._serial = serial.value
-        self._verbose(ERROR_CODE[error])
-        return self._serial
+        error = _dll.GetCameraSerialNumber(byref(serial))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return serial.value
 
-    def GetHeadModel(self):
+    @classmethod
+    def GetHeadModel(cls):
         '''
         Returns the camera head model name
 
@@ -192,10 +168,10 @@ class AndorSDK():
             (str) : model name
         '''
         model = ctypes.create_string_buffer(128)
-        error = self._dll.GetHeadModel(byref(model))
-        self._model = model.value
-        self._verbose(ERROR_CODE[error])
-        return self._model
+        error = _dll.GetHeadModel(byref(model))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return model.value.decode()
 
     def GetDetector(self):
         '''
@@ -209,8 +185,9 @@ class AndorSDK():
         '''
         xpixels = c_int()
         ypixels = c_int()
-        error = self._dll.GetDetector(byref(xpixels), byref(ypixels))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.GetDetector(byref(xpixels), byref(ypixels))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
         return (xpixels.value, ypixels.value)
 
@@ -226,8 +203,9 @@ class AndorSDK():
             (str,int) : error and binning value
         '''
         maxbinning = c_int()
-        error = self._dll.GetMaximumBinning(readmode, horver, byref(maxbinning))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.GetMaximumBinning(readmode, horver, byref(maxbinning))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return (ERROR_CODE[error], maxbinning.value)
 
     def GetNumberHSSpeeds(self):
@@ -241,11 +219,11 @@ class AndorSDK():
             (int) : the number of HS speeds
         '''
         noHSSpeeds = c_int()
-        error = self._dll.GetNumberHSSpeeds(self._channel, self._outamp,
+        error = _dll.GetNumberHSSpeeds(self._channel, self._outamp,
                                             byref(noHSSpeeds))
-        self._noHSSpeeds = noHSSpeeds.value
-        self._verbose(ERROR_CODE[error])
-        return self._noHSSpeeds
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return noHSSpeeds.value
 
     def GetNumberVSSpeeds(self):
         '''
@@ -258,10 +236,11 @@ class AndorSDK():
             (int) : the number of VS speeds
         '''
         noVSSpeeds = c_int()
-        error = self._dll.GetNumberVSSpeeds(byref(noVSSpeeds))
+        error = _dll.GetNumberVSSpeeds(byref(noVSSpeeds))
         self._noVSSpeeds = noVSSpeeds.value
-        self._verbose(ERROR_CODE[error])
-        return self._noVSSpeeds
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return noVSSpeeds.value
 
     # Cooler and temperature
     def CoolerON(self):
@@ -274,8 +253,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.CoolerON()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.CoolerON()
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def CoolerOFF(self):
         '''
@@ -287,8 +267,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.CoolerOFF()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.CoolerOFF()
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetCoolerMode(self, mode):
         '''
@@ -300,8 +281,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetCoolerMode(mode)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetCoolerMode(mode)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def IsCoolerOn(self):
         '''
@@ -314,8 +296,9 @@ class AndorSDK():
             (int) : Cooler status
         '''
         iCoolerStatus = c_int()
-        error = self._dll.IsCoolerOn(byref(iCoolerStatus))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.IsCoolerOn(byref(iCoolerStatus))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return iCoolerStatus.value
 
     def GetTemperatureRange(self):
@@ -331,8 +314,9 @@ class AndorSDK():
         ctemperature_min = c_int()
         ctemperature_max = c_int()
 
-        error = self._dll.GetTemperatureRange(byref(ctemperature_min), byref(ctemperature_max))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.GetTemperatureRange(byref(ctemperature_min), byref(ctemperature_max))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error], (ctemperature_min.value, ctemperature_max.value)
 
     def GetTemperature(self):
@@ -346,11 +330,7 @@ class AndorSDK():
             (int) : temperature in degrees Celcius
         '''
         ctemperature = c_int()
-        error = self._dll.GetTemperature(byref(ctemperature))
-        self._temperature = ctemperature.value
-        self._verbose(ERROR_CODE[error])
-        # ~ print "Temperature is: %g [Set T: %g]" \
-        # ~ % (self._temperature, self._set_T)
+        error = _dll.GetTemperature(byref(ctemperature))
         return ERROR_CODE[error], ctemperature.value
 
     def SetTemperature(self, temperature):  # Fixme:, see if this works
@@ -364,9 +344,9 @@ class AndorSDK():
             None
         '''
         #        ctemperature = c_int(temperature)
-        error = self._dll.SetTemperature(int(temperature))
-        self._set_T = temperature
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetTemperature(int(temperature))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     ###### Single Parameters Set ######
     def SetAccumulationCycleTime(self, time_):
@@ -379,8 +359,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetAccumulationCycleTime(c_float(time_))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetAccumulationCycleTime(c_float(time_))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetAcquisitionMode(self, mode):
         '''
@@ -392,8 +373,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetAcquisitionMode(int(mode))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetAcquisitionMode(int(mode))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetDriverEvent(self, hevent):
         '''
@@ -405,8 +387,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetDriverEvent(hevent)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetDriverEvent(hevent)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def WaitForAcquisition(self):
         '''
@@ -415,8 +398,9 @@ class AndorSDK():
         Output:
             error (str): error as a string
         '''
-        error = self._dll.WaitForAcquisition()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.WaitForAcquisition()
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error]
 
     def CancelWait(self):
@@ -426,8 +410,9 @@ class AndorSDK():
         Output:
             error (str): error as a string
         '''
-        error = self._dll.CancelWait()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.CancelWait()
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error]
 
     def SetADChannel(self, index):
@@ -440,9 +425,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetADChannel(index)
-        self._verbose(ERROR_CODE[error])
-        self._channel = index
+        error = _dll.SetADChannel(index)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetEMAdvanced(self, gainAdvanced):
         '''
@@ -454,8 +439,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetEMAdvanced(gainAdvanced)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetEMAdvanced(gainAdvanced)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetEMCCDGainMode(self, gainMode):
         '''
@@ -467,8 +453,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetEMCCDGainMode(gainMode)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetEMCCDGainMode(gainMode)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetExposureTime(self, time_):
         '''
@@ -480,8 +467,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetExposureTime(c_float(time_))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetExposureTime(c_float(time_))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def GetMaximumExposure(self):
         '''
@@ -493,8 +481,9 @@ class AndorSDK():
             float : Will contain the Maximum exposure value on return.
         '''
         maxexpo = c_float()
-        error = self._dll.GetMaximumExposure(byref(maxexpo))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.GetMaximumExposure(byref(maxexpo))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error], maxexpo.value
 
     def SetFrameTransferMode(self, frameTransfer):
@@ -507,8 +496,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetFrameTransferMode(frameTransfer)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetFrameTransferMode(frameTransfer)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetImageRotate(self, iRotate):
         '''
@@ -520,8 +510,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetImageRotate(iRotate)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetImageRotate(iRotate)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetKineticCycleTime(self, time_):
         '''
@@ -533,8 +524,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetKineticCycleTime(c_float(time_))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetKineticCycleTime(c_float(time_))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetNumberAccumulations(self, number):
         '''
@@ -547,8 +539,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetNumberAccumulations(int(number))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetNumberAccumulations(int(number))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetNumberKinetics(self, numKin):
         '''
@@ -560,8 +553,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetNumberKinetics(numKin)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetNumberKinetics(numKin)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetOutputAmplifier(self, index):
         '''
@@ -573,9 +567,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetOutputAmplifier(index)
-        self._verbose(ERROR_CODE[error])
-        self._outamp = index
+        error = _dll.SetOutputAmplifier(index)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetReadMode(self, mode):
         '''
@@ -591,9 +585,10 @@ class AndorSDK():
         Output:
             error
         '''
-        error = self._dll.SetReadMode(mode)
+        error = _dll.SetReadMode(mode)
         self._ReadMode = mode
-        self._verbose(ERROR_CODE[error])
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error]
 
     def SetSingleTrack(self, center, height=10):
@@ -607,9 +602,10 @@ class AndorSDK():
         Output:
             error
         '''
-        error = self._dll.SetSingleTrack(int(center), int(height))
+        error = _dll.SetSingleTrack(int(center), int(height))
 
-        self._verbose(ERROR_CODE[error])
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error]
 
     def SetMultiTrack(self, N, height, offset):
@@ -629,10 +625,11 @@ class AndorSDK():
         bottom = c_int()
         gap = c_int()
 
-        error = self._dll.SetMultiTrack(int(N), int(height), int(offset),
+        error = _dll.SetMultiTrack(int(N), int(height), int(offset),
                                         byref(bottom), byref(gap))
 
-        self._verbose(ERROR_CODE[error])
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error], bottom.value, gap.value
 
     def SetImage(self, binx, biny, startx, endx, starty, endy):
@@ -650,10 +647,11 @@ class AndorSDK():
         Output:
             error
         '''
-        error = self._dll.SetImage(int(binx), int(biny), int(startx),
+        error = _dll.SetImage(int(binx), int(biny), int(startx),
                                    int(endx), int(starty), int(endy))
 
-        self._verbose(ERROR_CODE[error])
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error]
 
     def SetTriggerMode(self, mode):
@@ -668,8 +666,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetTriggerMode(mode)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetTriggerMode(mode)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     ###### Single Parameters Get ######
 
@@ -685,7 +684,7 @@ class AndorSDK():
         '''
         acc = c_long()
         series = c_long()
-        error = self._dll.GetAcquisitionProgress(byref(acc), byref(series))
+        error = _dll.GetAcquisitionProgress(byref(acc), byref(series))
         if ERROR_CODE[error] == "DRV_SUCCESS":
             return acc.value
         else:
@@ -702,8 +701,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.GetAcquiredData(arr_ptr, array_dim)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.GetAcquiredData(arr_ptr, array_dim)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error]
 
     def GetAcquiredData(self, imageArray):
@@ -725,15 +725,14 @@ class AndorSDK():
         # ~ print "Dim is %s" % dim
         cimageArray = c_int * dim
         cimage = cimageArray()
-        error = self._dll.GetAcquiredData(pointer(cimage), dim)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.GetAcquiredData(pointer(cimage), dim)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
         for i in range(len(cimage)):
             imageArray.append(cimage[i])
-
-        self._imageArray = imageArray[:]
-        self._verbose(ERROR_CODE[error])
-        return self._imageArray
+        imageArray = imageArray[:]
+        return imageArray
 
     def GetBitDepth(self):
         '''
@@ -749,7 +748,7 @@ class AndorSDK():
         self._bitDepths = []
 
         for i in range(self._noADChannels):
-            self._dll.GetBitDepth(i, byref(bitDepth))
+            _dll.GetBitDepth(i, byref(bitDepth))
             self._bitDepths.append(bitDepth.value)
         return self._bitDepths
 
@@ -767,8 +766,9 @@ class AndorSDK():
         xsize = c_float()
         ysize = c_float()
 
-        error = self._dll.GetPixelSize(byref(xsize), byref(ysize))
-        self._verbose(ERROR_CODE[error])
+        error = _dll.GetPixelSize(byref(xsize), byref(ysize))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return (ERROR_CODE[error], (xsize.value, ysize.value))
 
     def GetEMGainRange(self):
@@ -783,10 +783,10 @@ class AndorSDK():
         '''
         low = c_int()
         high = c_int()
-        error = self._dll.GetEMGainRange(byref(low), byref(high))
-        self._gainRange = (low.value, high.value)
-        self._verbose(ERROR_CODE[error])
-        return self._gainRange
+        error = _dll.GetEMGainRange(byref(low), byref(high))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return low.value, high.value
 
     def GetNumberADChannels(self):
         '''
@@ -799,10 +799,10 @@ class AndorSDK():
             (int) : The number of AD channels
         '''
         noADChannels = c_int()
-        error = self._dll.GetNumberADChannels(byref(noADChannels))
-        self._noADChannels = noADChannels.value
-        self._verbose(ERROR_CODE[error])
-        return self._noADChannels
+        error = _dll.GetNumberADChannels(byref(noADChannels))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return noADChannels.value
 
     def GetNumberPreAmpGains(self):
         '''
@@ -815,10 +815,10 @@ class AndorSDK():
             (int) : The number of Pre Amp Gains
         '''
         noGains = c_int()
-        error = self._dll.GetNumberPreAmpGains(byref(noGains))
-        self._noGains = noGains.value
-        self._verbose(ERROR_CODE[error])
-        return self._noGains
+        error = _dll.GetNumberPreAmpGains(byref(noGains))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return noGains.value
 
     def GetSeriesProgress(self):
         '''
@@ -832,11 +832,10 @@ class AndorSDK():
         '''
         acc = c_long()
         series = c_long()
-        error = self._dll.GetAcquisitionProgress(byref(acc), byref(series))
-        if ERROR_CODE[error] == "DRV_SUCCESS":
-            return series.value
-        else:
-            return None
+        error = _dll.GetAcquisitionProgress(byref(acc), byref(series))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return series.value
 
     def GetStatus(self):
         '''
@@ -856,10 +855,10 @@ class AndorSDK():
                        DRV_SPOOLERROR
         '''
         status = c_int()
-        error = self._dll.GetStatus(byref(status))
-        self._status = ERROR_CODE[status.value]
-        self._verbose(ERROR_CODE[error])
-        return self._status
+        error = _dll.GetStatus(byref(status))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return ERROR_CODE[status.value]
 
     ###### Single Parameters Get/Set ######
     def GetEMCCDGain(self):
@@ -873,10 +872,10 @@ class AndorSDK():
             (int) : EMCCD gain setting
         '''
         gain = c_int()
-        error = self._dll.GetEMCCDGain(byref(gain))
-        self._gain = gain.value
-        self._verbose(ERROR_CODE[error])
-        return self._gain
+        error = _dll.GetEMCCDGain(byref(gain))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return gain.value
 
     def SetEMCCDGain(self, gain):
         '''
@@ -888,8 +887,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetEMCCDGain(gain)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetEMCCDGain(gain)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def GetHSSpeed(self):
         '''
@@ -902,11 +902,13 @@ class AndorSDK():
             (float[]) : The speeds of the selected channel
         '''
         HSSpeed = c_float()
-        self._HSSpeeds = []
-        for i in range(self._noHSSpeeds):
-            self._dll.GetHSSpeed(self._channel, self._outamp, i, byref(HSSpeed))
-            self._HSSpeeds.append(HSSpeed.value)
-        return self._HSSpeeds
+        HSSpeeds = []
+        for i in range(self.GetNumberHSSpeeds()):
+            error = _dll.GetHSSpeed(self._channel, self._outamp, i, byref(HSSpeed))
+            if error != 20002:
+                raise IOError(ERROR_CODE[error])
+            HSSpeeds.append(HSSpeed.value)
+        return HSSpeeds
 
     def SetHSSpeed(self, index):
         '''
@@ -918,9 +920,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetHSSpeed(index)
-        self._verbose(ERROR_CODE[error])
-        self._hsspeed = index
+        error = _dll.SetHSSpeed(index)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def GetVSSpeed(self):
         '''
@@ -935,8 +937,10 @@ class AndorSDK():
         VSSpeed = c_float()
         self._VSSpeeds = []
 
-        for i in range(self._noVSSpeeds):
-            self._dll.GetVSSpeed(i, byref(VSSpeed))
+        for i in range(self.GetVSSpeed()):
+            error = _dll.GetVSSpeed(i, byref(VSSpeed))
+            if error != 20002:
+                raise IOError(ERROR_CODE[error])
             self._VSSpeeds.append(VSSpeed.value)
         return self._VSSpeeds
 
@@ -950,9 +954,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetVSSpeed(index)
-        self._verbose(ERROR_CODE[error])
-        self._vsspeed = index
+        error = _dll.SetVSSpeed(index)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def GetPreAmpGain(self):
         '''
@@ -965,12 +969,14 @@ class AndorSDK():
             (float[]) : The pre amp gains
         '''
         gain = c_float()
-        self._preAmpGain = []
+        preAmpGain = []
 
-        for i in range(self._noGains):
-            self._dll.GetPreAmpGain(i, byref(gain))
-            self._preAmpGain.append(gain.value)
-        return self._preAmpGain
+        for i in range(self.GetNumberPreAmpGains()):
+            error = _dll.GetPreAmpGain(i, byref(gain))
+            if error != 20002:
+                raise IOError(ERROR_CODE[error])
+            preAmpGain.append(gain.value)
+        return preAmpGain
 
     def SetPreAmpGain(self, index):
         '''
@@ -982,8 +988,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetPreAmpGain(index)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetPreAmpGain(index)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         self._preampgain = index
 
     ###### iDus interaction Functions ######
@@ -991,23 +998,25 @@ class AndorSDK():
         '''
         Shut down the Andor
         '''
-        error = self._dll.ShutDown()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.ShutDown()
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def AbortAcquisition(self):
         '''
         Abort the acquisition
         '''
-        error = self._dll.AbortAcquisition()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.AbortAcquisition()
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def StartAcquisition(self):
         '''
         Start the acquisition
         '''
-        error = self._dll.StartAcquisition()
-        # self._dll.WaitForAcquisition()
-        self._verbose(ERROR_CODE[error])
+        error = _dll.StartAcquisition()
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetSingleImage(self):
         '''
@@ -1037,12 +1046,13 @@ class AndorSDK():
         exposure = c_float()
         accumulate = c_float()
         kinetic = c_float()
-        error = self._dll.GetAcquisitionTimings(byref(exposure),
+        error = _dll.GetAcquisitionTimings(byref(exposure),
                                                 byref(accumulate), byref(kinetic))
         self._exposure = exposure.value
         self._accumulate = accumulate.value
         self._kinetic = kinetic.value
-        self._verbose(ERROR_CODE[error])
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
         return (ERROR_CODE[error], dict(exposure=exposure.value, accumulate=accumulate.value, kinetic=kinetic.value))
 
     ###### Misc functions ######
@@ -1060,8 +1070,9 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetShutter(typ, mode, closingtime, openingtime)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetShutter(typ, mode, closingtime, openingtime)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetShutterEx(self, typ, mode, closingtime, openingtime, extmode):
         '''
@@ -1077,17 +1088,18 @@ class AndorSDK():
         Output:
             None
         '''
-        error = self._dll.SetShutterEx(typ, mode, closingtime, openingtime,
+        error = _dll.SetShutterEx(typ, mode, closingtime, openingtime,
                                        extmode)
-        self._verbose(ERROR_CODE[error])
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
     def SetSpool(self, active, method, path, framebuffersize):
         '''
         Set Spooling. Refer to manual for detailed description
         '''
-        error = self._dll.SetSpool(active, method, c_char_p(path),
-                                   framebuffersize)
-        self._verbose(ERROR_CODE[error])
+        error = _dll.SetSpool(active, method, c_char_p(path), framebuffersize)
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
 
 
 #####################################################

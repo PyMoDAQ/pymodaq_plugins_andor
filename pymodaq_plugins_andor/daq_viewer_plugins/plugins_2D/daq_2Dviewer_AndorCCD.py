@@ -7,22 +7,15 @@ from PyQt5 import QtWidgets, QtCore
 from easydict import EasyDict as edict
 from pymodaq.daq_viewer.utility_classes import DAQ_Viewer_base
 
-from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis
+from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis, find_dict_in_list_from_key_val
 from pymodaq.daq_viewer.utility_classes import comon_parameters
-from pymodaq_plugins_andor.hardware.andor_sdk2 import sdk2
 from pymodaq.daq_utils.parameter.utils import iter_children
 
-import sys
 
-is_64bits = sys.maxsize > 2 ** 32
+from ...hardware.andor_sdk2 import sdk2
+libpath = sdk2.dllpath
+camera_list = sdk2.AndorSDK.GetCamerasInfo()
 
-if platform.system() == "Linux":
-    libpath = find_library('libandor')  # to be checked
-elif platform.system() == "Windows":
-    if is_64bits:
-        libpath = find_library('atmcd64d')
-    else:
-        libpath = find_library('atmcd32d')
 
 class Andor_Camera_ReadOut(IntEnum):
     """
@@ -84,11 +77,11 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
     callback_signal = QtCore.pyqtSignal()
     hardware_averaging = True #will use the accumulate acquisition mode if averaging is neccessary
     params = comon_parameters+[
-        {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': libpath},
+        {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': str(libpath)},
         
         {'title': 'Camera Settings:', 'name': 'camera_settings', 'type': 'group', 'expanded': True, 'children': [
-            {'title': 'Camera SN:', 'name': 'camera_serialnumber', 'type': 'int', 'value': 0, 'readonly': True},
-            {'title': 'Camera Model:', 'name': 'camera_model', 'type': 'str', 'value': '', 'readonly': True},
+            {'title': 'Camera Models:', 'name': 'camera_model', 'type': 'list',
+                'values': [f"{cam['model']}-{cam['serial']}" for cam in camera_list]},
 
             {'title': 'Readout Modes:', 'name': 'readout', 'type': 'list', 'values': Andor_Camera_ReadOut.names()[0:-1],
                                             'value': 'FullVertBinning'},
@@ -327,14 +320,14 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         """
         self.status.update(edict(initialized=False, info="", x_axis=None, y_axis=None, controller=None))
         try:
-            self.emit_status(ThreadCommand('show_splash', ["Initialising Camera and/or Shamrock"]))
+            self.emit_status(ThreadCommand('show_splash', ["Initialising Andor CCD Camera "]))
             if self.settings.child(('controller_status')).value() == "Slave":
                 if controller is None:
                     raise Exception('no controller has been defined externally while this detector is a slave one')
                 else:
                     self.controller = controller
             else:
-                self.controller = sdk2.AndorSDK(self.settings.child(('andor_lib')).value())
+                self.controller = sdk2.AndorSDK()
 
             self.emit_status(ThreadCommand('show_splash', ["Set/Get Camera's settings"]))
             self.ini_camera()
@@ -358,8 +351,9 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
     def ini_camera(self):
         #  %%%%%% Get image size and current binning
         # get info from camera
-        self.settings.child('camera_settings', 'camera_serialnumber').setValue(self.controller.GetCameraSerialNumber())
-        self.settings.child('camera_settings', 'camera_model').setValue(self.controller.GetHeadModel().decode())
+        model_param = self.settings.child('camera_settings', 'camera_model')
+        cam_index = model_param.opts['limits'].index(model_param.value())
+        self.controller.SetCurrentCamera(camera_list[cam_index]['handle'])
 
         self.CCDSIZEX, self.CCDSIZEY = self.controller.GetDetector()
         self.settings.child('camera_settings', 'readout_settings',
@@ -437,7 +431,8 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         """
 
         err, temp = self.controller.GetTemperature()
-        if temp < -20:
+        print(temp)
+        if temp < -20.:
             print(
                 "Camera temperature is still at {:d}°C. Closing it now may damage it! The cooling will be maintained "
                 "while shutting down camera. Keep it power plugged!!!".format(

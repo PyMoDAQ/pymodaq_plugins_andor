@@ -5,7 +5,7 @@ from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_ke
 from PyQt5 import QtWidgets
 
 
-class DAQ_1DViewer_Shamrock(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
+class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
     """
         =============== ==================
 
@@ -21,6 +21,8 @@ class DAQ_1DViewer_Shamrock(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
     d, ind = find_dict_in_list_from_key_val(params_shamrock, 'name', 'andor_lib', return_index=True)
     if d is not None:
         params_shamrock.pop(ind)
+    #  TODO
+    #  Iterate over a flattened list (here the right dict is within a children entry....
     d = find_dict_in_list_from_key_val(params_shamrock, 'name', 'spectro_wl')
     if d is not None:
         d['readonly'] = False
@@ -48,11 +50,13 @@ class DAQ_1DViewer_Shamrock(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
 
     def ini_detector(self, controller=None):
         try:
-            self.status.update(DAQ_2DViewer_AndorCCD.ini_detector())
-            self.camera_controller = self.status.controller
+            status_shamrock = DAQ_Move_Shamrock.ini_stage(self, controller)
+            self.shamrock_controller = status_shamrock.controller
 
-            self.status.update(DAQ_Move_Shamrock.ini_stage())
-            self.shamrock_controller = self.status.controller
+            status_camera = DAQ_2DViewer_AndorCCD.ini_detector(self, controller)
+            self.camera_controller = status_camera.controller
+
+            self.status.initialized = status_shamrock.initialized and status_camera.initialized
 
             self.setCalibration()
             return self.status
@@ -65,9 +69,9 @@ class DAQ_1DViewer_Shamrock(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
 
     def setCalibration(self):
         #setNpixels
-        err, (width, height) = self.shamrock_controller.GetPixelSize()
-        err = self.controller.SetNumberPixelsSR(0, self.CCDSIZEX)
-        err = self.controller.SetPixelWidthSR(0, width)
+        err, (width, height) = self.camera_controller.GetPixelSize()
+        err = self.shamrock_controller.SetNumberPixelsSR(0, self.CCDSIZEX)
+        err = self.shamrock_controller.SetPixelWidthSR(0, width)
 
         self.get_wavelength()
         self.x_axis = self.get_xaxis()
@@ -76,7 +80,7 @@ class DAQ_1DViewer_Shamrock(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
     def getCalibration(self):
 
         if self.shamrock_controller is not None:
-            (err, calib) = self.controller.GetCalibrationSR(0, self.CCDSIZEX)
+            (err, calib) = self.shamrock_controller.GetCalibrationSR(0, self.CCDSIZEX)
             if err != "SHAMROCK_SUCCESS":
                 raise Exception(err)
 

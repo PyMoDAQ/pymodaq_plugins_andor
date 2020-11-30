@@ -1,28 +1,15 @@
 import sys
 import numpy as np
 import ctypes
+from ctypes.util import find_library
 import platform
 from easydict import EasyDict as edict
 from pymodaq.daq_move.utility_classes import DAQ_Move_base, comon_parameters
 from pymodaq.daq_utils.daq_utils import ThreadCommand
-from ..hardware.shamrock_sdk import ShamrockSDK
+from ..hardware import shamrock_sdk
 from pathlib import Path
 
-is_64bits = sys.maxsize > 2 ** 32
-
-if platform.system() == "Linux":
-    libpath = ctypes.util.find_library('libandor')  # to be checked
-elif platform.system() == "Windows":
-    if is_64bits:
-        libpath = ctypes.util.find_library('atmcd64d')
-        if libpath is not None:
-            libpath = Path(libpath).joinpath('Shamrock64')
-    else:
-        libpath = ctypes.util.find_library('atmcd32d')
-        if libpath is not None:
-            libpath = Path(libpath).joinpath('Shamrock')
-if libpath is None:
-    libpath = ""
+libpath = shamrock_sdk.dllpath
 
 
 class DAQ_Move_Shamrock(DAQ_Move_base):
@@ -40,24 +27,33 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
     stage_names = []  # "list of strings of the multiaxes
 
     params = [
-                 {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': libpath},
-                 {'title': 'Spectro Settings:', 'name': 'spectro_settings', 'type': 'group', 'expanded': True,
-                  'children': [
-                      {'title': 'Spectro SN:', 'name': 'spectro_serialnumber', 'type': 'str', 'value': '',
-                       'readonly': True},
-                      {'title': 'Wavelength (nm):', 'name': 'spectro_wl', 'type': 'float', 'value': 600, 'min': 0,
-                       'readonly': True},
-                      {'title': 'Grating Settings:', 'name': 'grating_settings', 'type': 'group', 'expanded': True,
-                       'children': [
-                           {'title': 'Grating:', 'name': 'grating', 'type': 'list'},
-                           {'title': 'Lines (/mm):', 'name': 'lines', 'type': 'int', 'readonly': True},
-                           {'title': 'Blaze WL (nm):', 'name': 'blaze', 'type': 'str', 'readonly': True},
-                       ]},
-                      {'title': 'Flip wavelength axis:', 'name': 'flip_wavelength', 'type': 'bool', 'value': False,
-                       'visible': False},
-                      {'title': 'Go to zero order:', 'name': 'zero_order', 'type': 'bool'},
-                  ]},
-             ] + comon_parameters
+        {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': str(libpath), 'readonly': True},
+        {'title': 'Spectro Settings:', 'name': 'spectro_settings', 'type': 'group', 'expanded': True,
+            'children': [
+                {'title': 'Spectro SN:', 'name': 'spectro_serialnumber', 'type': 'str', 'value': '',
+                    'readonly': True},
+                {'title': 'Wavelength (nm):', 'name': 'spectro_wl', 'type': 'float', 'value': 600, 'min': 0,
+                    'readonly': True},
+                {'title': 'Home Wavelength (nm):', 'name': 'spectro_wl_home', 'type': 'float', 'value': 600, 'min': 0,
+                 'readonly': False},
+                {'title': 'Grating Settings:', 'name': 'grating_settings', 'type': 'group', 'expanded': True,
+                    'children': [
+                        {'title': 'Grating:', 'name': 'grating', 'type': 'list'},
+                        {'title': 'Lines (/mm):', 'name': 'lines', 'type': 'int', 'readonly': True},
+                        {'title': 'Blaze WL (nm):', 'name': 'blaze', 'type': 'str', 'readonly': True},
+                    ]},
+                {'title': 'Flip wavelength axis:', 'name': 'flip_wavelength', 'type': 'bool', 'value': False,
+                    'visible': False},
+                {'title': 'Go to zero order:', 'name': 'zero_order', 'type': 'bool'},
+            ]},
+        {'title': 'MultiAxes:', 'name': 'multiaxes', 'type': 'group', 'visible': is_multiaxes, 'children': [
+            {'title': 'is Multiaxes:', 'name': 'ismultiaxes', 'type': 'bool', 'value': is_multiaxes,
+                'default': False},
+            {'title': 'Status:', 'name': 'multi_status', 'type': 'list', 'value': 'Master',
+                'values': ['Master', 'Slave']},
+            {'title': 'Axis:', 'name': 'axis', 'type': 'list', 'values': stage_names},
+
+        ]}] + comon_parameters
 
     def __init__(self, parent=None, params_state=None):
 
@@ -91,9 +87,12 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
             elif param.name() == 'zero_order':
                 if param.value():
                     param.setValue(False)
+                    self.emit_status(ThreadCommand('show_splash', ["Moving to zero order, please wait!"]))
                     err = self.controller.GotoZeroOrderSR(0)
                     if err != 'SHAMROCK_SUCCESS':
                         raise Exception(err)
+                    self.check_position()
+                    self.emit_status(ThreadCommand('close_splash'))
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
@@ -131,13 +130,14 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         self.status.update(edict(initialized=False, info="", controller=None))
         try:
             self.emit_status(ThreadCommand('show_splash', ["Initialising Shamrock"]))
-            if self.settings.child(('controller_status')).value() == "Slave":
+            if self.settings.child('multiaxes', 'ismultiaxes').value() and self.settings.child('multiaxes',
+                                                                                'multi_status').value() == "Slave":
                 if controller is None:
                     raise Exception('no controller has been defined externally while this detector is a slave one')
                 else:
                     self.controller = controller
             else:
-                self.controller = ShamrockSDK(self.settings.child(('andor_lib')).value())
+                self.controller = shamrock_sdk.ShamrockSDK()
 
             self.emit_status(ThreadCommand('show_splash', ["Set/Get Shamrock's settings"]))
             self.ini_spectro()
@@ -197,7 +197,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         position = self.set_position_with_scaling(position)  # apply scaling if the user specified one
 
         self.set_wavelength(position)
-        self.emit_status(ThreadCommand('Update_Status', ['Some info you want to log']))
+
         ##############################
 
         self.target_position = position
@@ -214,8 +214,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         self.target_position = position + self.current_position
 
         self.set_wavelength(self.target_position)
-
-        self.emit_status(ThreadCommand('Update_Status', ['Some info you want to log']))
         ##############################
 
         self.poll_moving()
@@ -224,9 +222,8 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         """
 
         """
-        self.controller.set_wavelength(np.mean((self.settings.child('spectro_settings', 'spectro_wl').opts['limits'])))
-        self.emit_status(ThreadCommand('Update_Status', ['Some info you want to log']))
-        ##############################
+        self.move_Abs(self.settings.child('spectro_settings', 'spectro_wl_home').value())
+
 
     def stop_motion(self):
         """
@@ -258,8 +255,15 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         (err, wl_min, wl_max) = self.controller.GetWavelengthLimitsSR(0, ind_grating)
 
         if err == "SHAMROCK_SUCCESS":
-            self.settings.child('spectro_settings', 'spectro_wl').setOpts(limits=(wl_min, wl_max),
-                                                                          tip=f'Possible values are within {wl_min} and {wl_max} for the selected grating')
+            self.settings.child('spectro_settings',
+                                'spectro_wl').setOpts(limits=(wl_min, wl_max),
+                                                      tip=f'Possible values are within {wl_min} and {wl_max} for'
+                                                          f' the selected grating')
+            self.settings.child('spectro_settings',
+                                'spectro_wl_home').setOpts(limits=(wl_min, wl_max),
+                                                           tip=f'Possible values are within {wl_min} and {wl_max} for'
+                                                               f' the selected grating')
+
 
         self.emit_status(ThreadCommand('close_splash'))
 

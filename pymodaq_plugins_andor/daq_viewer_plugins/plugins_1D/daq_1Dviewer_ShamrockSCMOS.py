@@ -5,7 +5,7 @@ from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_ke
 from PyQt5 import QtWidgets
 
 
-class DAQ_1DViewer_Shamrock(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamrock):
+class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamrock):
     """
         =============== ==================
 

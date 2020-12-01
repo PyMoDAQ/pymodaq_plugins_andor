@@ -36,19 +36,6 @@ import queue as Queue
 
 
 class AndorBase(sdk3cam.SDK3Camera):
-    numpy_frames = 1
-    MODE_CONTINUOUS = 1
-    MODE_SINGLE_SHOT = 0
-
-    validROIS = [(2592, 2160, 1, 1),
-                 (2544, 2160, 1, 25),
-                 (2064, 2048, 57, 265),
-                 (1776, 1760, 201, 409),
-                 (1920, 1080, 537, 337),
-                 (1392, 1040, 561, 601),
-                 (528, 512, 825, 1033),
-                 (240, 256, 953, 1177),
-                 (144, 128, 1017, 1225)]
 
     def __init__(self, camNum, nbuffer=1):
         # define properties
@@ -95,108 +82,12 @@ class AndorBase(sdk3cam.SDK3Camera):
 
         sdk3cam.SDK3Camera.__init__(self, camNum)
 
-        # end auto properties
 
-        self.camLock = threading.Lock()
-
-        self.buffersToQueue = Queue.Queue()
-        self.queuedBuffers = Queue.Queue()
-        self.fullBuffers = Queue.Queue()
-
-        self.nQueued = 0
-        self.nFull = 0
-
-        self.nBuffers = 100
-
-        self.contMode = True
-        self.burstMode = False
-
-        self._temp = 0
-        self._frameRate = 0
-
-
-    def init_camera(self, polling_enable=True):
+    def init_camera(self):
         super().init_camera()
-        self.polling_enable = polling_enable
-        # set some intial parameters
-        # self.FrameCount.setValue(1) #only for fixed mode?
-        # if self.CycleMode.isImplemented():
-        #     self.CycleMode.setString(u'Continuous')
-        # # if self.SimplePreAmpGainControl.isImplemented():
-        # #     self.SimplePreAmpGainControl.setString(u'11-bit (low noise)')
-        # if self.PixelEncoding.isImplemented():
-        #     self.PixelEncoding.setString('Mono12Packed')  # FIXME allow Mono16
-        # if self.SensorCooling.isImplemented():
-        #     self.SensorCooling.setValue(True)  # FIXME allow cooling selection
-        # try:
-        #     self.TemperatureControl.setString('-30.00')
-        # except sdk3.CameraError:
-        #     # Some camera cannot write the temperature control and returns
-        #     # AT_ERR_NOTWRITABLE
-        #     pass
-        # self.PixelReadoutRate.setIndex(1)
-
-        if self.polling_enable:
-            # set up polling thread
-            self.doPoll = False
-            self.pollLoopActive = True
-            self.pollThread = threading.Thread(target=self._pollLoop)
-            self.pollThread.start()
-
-    # Neo buffer helper functions
-
-    def initBuffers(self):
-        self._flush()
-        bufSize = self.ImageSizeBytes.getValue()
-        # print(bufSize)
-        for i in range(self.nBuffers):
-            buf = np.empty(bufSize, 'uint8')
-            #buf = create_aligned_array(bufSize, 'uint8')
-            self._queueBuffer(buf)
-
-        self.doPoll = True
 
     def _flush(self):
-        self.doPoll = False
-        # purge camera buffers
         sdk3.Flush(self.handle)
-
-        # purge our local queues
-        while not self.queuedBuffers.empty():
-            self.queuedBuffers.get()
-
-        while not self.buffersToQueue.empty():
-            self.buffersToQueue.get()
-
-        self.nQueued = 0
-
-        while not self.fullBuffers.empty():
-            self.fullBuffers.get()
-
-        self.nFull = 0
-        # purge camera buffers
-        sdk3.Flush(self.handle)
-
-    def _queueBuffer(self, buf):
-        # self.queuedBuffers.put(buf)
-        # print np.base_repr(buf.ctypes.data, 16)
-        #sdk3.QueueBuffer(self.handle, buf.ctypes.data_as(sdk3.POINTER(sdk3.AT_U8)), buf.nbytes)
-        #self.nQueued += 1
-        self.buffersToQueue.put(buf)
-
-    def _queueBuffers(self):
-        # self.camLock.acquire()
-        while not self.buffersToQueue.empty():
-            buf = self.buffersToQueue.get(block=False)
-            self.queuedBuffers.put(buf)
-            # print np.base_repr(buf.ctypes.data, 16)
-            sdk3.QueueBuffer(self.handle, buf.ctypes.data_as(sdk3.POINTER(sdk3.AT_U8)), buf.nbytes)
-            #self.fLog.write('%f\tq\n' % time.time())
-            self.nQueued += 1
-        # self.camLock.release()
-
-    def queue_single_buffer(self, buf):
-        sdk3.QueueBuffer(self.handle, buf.ctypes.data_as(sdk3.POINTER(sdk3.AT_U8)), buf.nbytes)
 
     def wait_buffer(self):
         try:
@@ -223,80 +114,6 @@ class AndorBase(sdk3cam.SDK3Camera):
 
     def flush(self):
         self._flush()
-
-    def _pollBuffer(self):
-        try:
-            #self.fLog.write('%f\tp\n' % time.time())
-            pData, lData = sdk3.WaitBuffer(self.handle, 100)
-            #self.fLog.write('%f\tb\n' % time.time())
-        except sdk3.TimeoutError as e:
-            # Both AT_ERR_TIMEDOUT and AT_ERR_NODATA
-            # get caught as TimeoutErrors
-            # if e.errNo == sdk3.AT_ERR_TIMEDOUT:
-            #    self.fLog.write('%f\tt\n' % time.time())
-            # else:
-            #    self.fLog.write('%f\tn\n' % time.time())
-            return
-        except sdk3.CameraError as e:
-            #    if not e.errNo == sdk3.AT_ERR_NODATA:
-            #        traceback.print_exc()
-            return
-
-        # self.camLock.acquire()
-        buf = self.queuedBuffers.get()
-        self.nQueued -= 1
-        if not buf.ctypes.data == ctypes.addressof(pData.contents):
-            print((ctypes.addressof(pData.contents), buf.ctypes.data))
-            # self.camLock.release()
-            raise RuntimeError('Returned buffer not equal to expected buffer')
-            # print 'Returned buffer not equal to expected buffer'
-
-        self.fullBuffers.put(buf)
-        self.nFull += 1
-        # self.camLock.release()
-
-    def _pollLoop(self):
-        #self.fLog = open('poll.txt', 'w')
-        while self.pollLoopActive:
-            self._queueBuffers()
-            if self.doPoll:  # only poll if an acquisition is running
-                self._pollBuffer()
-            else:
-                # print 'w',
-                time.sleep(.05)
-            time.sleep(.0005)
-            # self.fLog.flush()
-        # self.fLog.close()
-
-    # PYME Camera interface functions - make this look like the other cameras
-    def ExpReady(self):
-        # self._pollBuffer()
-
-        return not self.fullBuffers.empty()
-
-    def ExtractColor(self, chSlice, mode):
-        # grab our buffer from the full buffers list
-        buf = self.fullBuffers.get()
-        self.nFull -= 1
-
-        # copy to the current 'active frame'
-        # print chSlice.shape, buf.view(chSlice.dtype).shape
-        #bv = buf.view(chSlice.dtype).reshape(chSlice.shape)
-        #chSlice[:] = bv
-        #chSlice[:,:] = bv
-
-        # FIXME mscvrt windows only?
-        #ctypes.cdll.msvcrt.memcpy(chSlice.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)), buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)), chSlice.nbytes)
-
-        xs, ys = chSlice.shape[:2]
-        a_s = self.AOIStride.getValue()
-        dt = self.PixelEncoding.getString()
-        sdk3.ConvertBuffer(buf.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
-                           chSlice.ctypes.data_as(ctypes.POINTER(ctypes.c_uint8)),
-                           xs, ys, a_s, dt, 'Mono16')
-
-        # recycle buffer
-        self._queueBuffer(buf)
 
     def GetSerialNumber(self):
         return self.SerialNumber.getValue()
@@ -345,9 +162,6 @@ class AndorBase(sdk3cam.SDK3Camera):
 
         return self._temp
 
-    def CamReady(*args):
-        return True
-
     def GetPicWidth(self):
         return self.AOIWidth.getValue()
 
@@ -363,77 +177,9 @@ class AndorBase(sdk3cam.SDK3Camera):
         self.AOIHeight.setValue(height)
         self.AOITop.setValue(top)
 
-    def SetROI(self, x1, y1, x2, y2):
-        # shouldn't do GUI stuff here, but quick way of making it work
-        print('Setting ROI')
-        pass
-
-    def GetROIX1(self):
-        return self.AOILeft.getValue()
-
-    def GetROIX2(self):
-        return self.AOILeft.getValue() + self.AOIWidth.getValue()
-
-    def GetROIY1(self):
-        return self.AOITop.getValue()
-
-    def GetROIY2(self):
-        return self.AOITop.getValue() + self.AOIHeight.getValue()
-
-    def DisplayError(*args):
-        pass
-
-    # def Init(*args):
-    #    pass
-
-    def Shutdown(self):
-        self.pollLoopActive = False
-        self.shutdown()
-        # pass
-
-    def GetStatus(*args):
-        pass
-
-    def SetCOC(*args):
-        pass
-
-    def StartExposure(self):
-        # make sure no acquisiton is running
-        self.StopAq()
-        self._temp = self.SensorTemperature.getValue()
-        self._frameRate = self.FrameRate.getValue()
-
-        logging.info('StartAq')
-        self._flush()
-        self.initBuffers()
-        self.AcquisitionStart()
-
     def StopAq(self):
         if self.CameraAcquiring.getValue():
             self.AcquisitionStop()
-
-    def StartLifePreview(*args):
-        raise Exception('Not implemented yet!!')
-
-    def StopLifePreview(*args):
-        raise Exception('Not implemented yet!!')
-
-    def GetBWPicture(*args):
-        raise Exception('Not implemented yet!!')
-
-    def CheckCoordinates(*args):
-        raise Exception('Not implemented yet!!')
-
-    # new fcns for Andor compatibility
-    def GetNumImsBuffered(self):
-        return self.nFull
-
-    def GetBufferSize(self):
-        return self.nBuffers
-
-    def SetActive(self, active=True):
-        '''flag the camera as active (or inactive) to dictate whether it writes it's metadata or not'''
-        self.active = active
 
     def GenStartMetadata(self, mdh):
         if self.active:
@@ -463,47 +209,9 @@ class AndorBase(sdk3cam.SDK3Camera):
             # if not realEMGain == None:
             mdh.setEntry('Camera.TrueEMGain', 1)
 
-    # functions to make us look more like andor camera
-    def GetEMGain(self):
-        return 1
-
-    def GetCCDTempSetPoint(self):
-        return self.TargetSensorTemperature.getValue()
-
-    def SetCCDTemp(self, temp):
-        self.TargetSensorTemperature.setValue(temp)
-        # pass
-
-    def SetEMGain(self, gain):
-        pass
-
-    def SetAcquisitionMode(self, aqMode):
-        self.CycleMode.setIndex(aqMode)
-        self.contMode = aqMode == self.MODE_CONTINUOUS
-
-    def SetBurst(self, burstSize):
-        if burstSize > 1:
-            self.SetAcquisitionMode(self.MODE_SINGLE_SHOT)
-            self.FrameCount.setValue(burstSize)
-            self.contMode = True
-            self.burstMode = True
-        else:
-            self.FrameCount.setValue(1)
-            self.SetAcquisitionMode(self.MODE_CONTINUOUS)
-            self.burstMode = False
-
-
-    def SetBaselineClamp(self, mode):
-        pass
 
     def GetFPS(self):
-        # return self.FrameRate.getValue()
-        return self._frameRate
-
-    def __del__(self):
-        pass
-#        self.Shutdown()
-        #self.compT.kill = True
+        return self.FrameRate.getValue()
 
 
 def getCameraInfos():

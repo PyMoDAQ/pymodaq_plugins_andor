@@ -2,6 +2,7 @@ from ..plugins_2D.daq_2Dviewer_AndorCCD import DAQ_2DViewer_AndorCCD
 from ...daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
 import numpy as np
 from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, Axis
+from pymodaq.daq_utils.parameter import utils as putils
 from PyQt5 import QtWidgets
 
 
@@ -18,15 +19,12 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
 
     param_camera = DAQ_2DViewer_AndorCCD.params
     params_shamrock = DAQ_Move_Shamrock.params
-    d, ind = find_dict_in_list_from_key_val(params_shamrock, 'name', 'andor_lib', return_index=True)
-    if d is not None:
-        params_shamrock.pop(ind)
-    #  TODO
-    #  Iterate over a flattened list (here the right dict is within a children entry....
-    d = find_dict_in_list_from_key_val(params_shamrock, 'name', 'spectro_wl')
+    putils.get_param_dict_from_name(params_shamrock, 'andor_lib', pop=True)
+
+    d = putils.get_param_dict_from_name(params_shamrock, 'spectro_wl')
     if d is not None:
         d['readonly'] = False
-    d = find_dict_in_list_from_key_val(params_shamrock, 'name', 'flip_wavelength')
+    d = putils.get_param_dict_from_name(params_shamrock, 'flip_wavelength')
     if d is not None:
         d['visible'] = True
     params = param_camera + params_shamrock
@@ -73,6 +71,8 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         err = self.shamrock_controller.SetNumberPixelsSR(0, self.CCDSIZEX)
         err = self.shamrock_controller.SetPixelWidthSR(0, width)
 
+        self.controller = self.shamrock_controller  # cos get_wavelength is internal to the shamrock move plugin where
+        # self.controller is not the one defined here
         self.get_wavelength()
         self.x_axis = self.get_xaxis()
 

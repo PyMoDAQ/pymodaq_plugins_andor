@@ -333,7 +333,7 @@ class AndorSDK:
         error = _dll.GetTemperature(byref(ctemperature))
         return ERROR_CODE[error], ctemperature.value
 
-    def SetTemperature(self, temperature):  # Fixme:, see if this works
+    def SetTemperature(self, temperature):
         '''
         Set the working temperature of the camera
 
@@ -716,7 +716,6 @@ class AndorSDK:
         Output:
             (array) : an array containing the acquired data
         '''
-        # FIXME : Check how this works for FVB !!!
         if self._ReadMode == 0:
             dim = self._width
         elif self._ReadMode == 4:

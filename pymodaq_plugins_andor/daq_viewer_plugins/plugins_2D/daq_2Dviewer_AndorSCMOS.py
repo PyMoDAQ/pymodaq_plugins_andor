@@ -71,26 +71,26 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                  'label': 'Max'},
                 {'title': 'Readout time (ms):', 'name': 'readout_time', 'type': 'float', 'value': 0., 'readonly': True},
                 ]},
+
+            {'title': 'Trigger Settings:', 'name': 'trigger', 'type': 'group', 'children': [
+                {'title': 'Mode:', 'name': 'trigger_mode', 'type': 'list', 'values': []},
+                {'title': 'Software Trigger:', 'name': 'soft_trigger', 'type': 'bool_push', 'value': False,
+                 'label': 'Fire'},
+                {'title': 'External Trigger delay (ms):', 'name': 'ext_trigger_delay', 'type': 'float', 'value': 0.},
             ]},
 
-        {'title': 'Trigger Settings:', 'name': 'trigger', 'type': 'group', 'children': [
-            {'title': 'Mode:', 'name': 'trigger_mode', 'type': 'list', 'values': []},
-            {'title': 'Software Trigger:', 'name': 'soft_trigger', 'type': 'bool_push', 'value': False,
-             'label': 'Fire'},
-            {'title': 'External Trigger delay (ms):', 'name': 'ext_trigger_delay', 'type': 'float', 'value': 0.},
-        ]},
-
-        {'title': 'Shutter Settings:', 'name': 'shutter', 'type': 'group', 'children': [
-            {'title': 'Mode:', 'name': 'shutter_mode', 'type': 'list', 'values': []},
-            {'title': 'External Trigger is:', 'name': 'shutter_on_ext_trigger', 'type': 'list', 'values': []},
-            ]},
+            {'title': 'Shutter Settings:', 'name': 'shutter', 'type': 'group', 'children': [
+                {'title': 'Mode:', 'name': 'shutter_mode', 'type': 'list', 'values': []},
+                {'title': 'External Trigger is:', 'name': 'shutter_on_ext_trigger', 'type': 'list', 'values': []},
+                ]},
 
 
-        {'title': 'Temperature Settings:', 'name': 'temperature_settings', 'type': 'group', 'children': [
-            {'title': 'Enable Cooling:', 'name': 'enable_cooling', 'type': 'bool', 'value': True},
-            {'title': 'Set Point:', 'name': 'set_point', 'type': 'list', 'values': []},
-            {'title': 'Current value:', 'name': 'current_value', 'type': 'float', 'value': 20, 'readonly': True},
-            {'title': 'Status:', 'name': 'status', 'type': 'list', 'values': [], 'readonly': True},
+            {'title': 'Temperature Settings:', 'name': 'temperature_settings', 'type': 'group', 'children': [
+                {'title': 'Enable Cooling:', 'name': 'enable_cooling', 'type': 'bool', 'value': True},
+                {'title': 'Set Point:', 'name': 'set_point', 'type': 'list', 'values': []},
+                {'title': 'Current value:', 'name': 'current_value', 'type': 'float', 'value': 20, 'readonly': True},
+                {'title': 'Status:', 'name': 'status', 'type': 'list', 'values': [], 'readonly': True},
+                ]},
             ]},
         ]
 
@@ -111,7 +111,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
         self.x_axis = None
         self.y_axis = None
-        self.controller = None
+        self.camera_controller = None
         self.data = None
         self.SIZEX, self.SIZEY = (None, None)
         self.camera_done = False
@@ -144,36 +144,36 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             QtWidgets.QApplication.processEvents()
 
             if param.name() == 'set_point':
-                self.controller.SetTemperature(param.value())
+                self.camera_controller.SetTemperature(param.value())
 
             elif param.name() == 'exposure':
-                self.controller.ExposureTime.setValue(self.settings.child('camera_settings', 'exposure').value() * 1e-3)
+                self.camera_controller.ExposureTime.setValue(self.settings.child('camera_settings', 'exposure').value() * 1e-3)
                 self.settings.child('camera_settings', 'exposure').setValue(
-                    self.controller.ExposureTime.getValue() * 1e3)
+                    self.camera_controller.ExposureTime.getValue() * 1e3)
 
             elif param.name() == 'encoding':
-                self.controller.SimplePreAmpGainControl.setString(param.value())
+                self.camera_controller.SimplePreAmpGainControl.setString(param.value())
 
-            elif param.name() in iter_children(self.settings.child('shutter'), []):
+            elif param.name() in iter_children(self.settings.child('camera_settings', 'shutter'), []):
                 self.set_shutter()
 
             elif param.name() in iter_children(self.settings.child('camera_settings', 'image_settings'), []):
                 if param.name() == 'binning': #if binning set from the preselection, update first the binx and biny values before setting the image area
-                    self.controller.AOIBinning.setString(param.value())
+                    self.camera_controller.AOIBinning.setString(param.value())
                     self.settings.child('camera_settings', 'image_settings', 'bin_x').setValue(
-                        self.controller.AOIHBin.getValue())
+                        self.camera_controller.AOIHBin.getValue())
                     self.settings.child('camera_settings', 'image_settings', 'bin_y').setValue(
-                        self.controller.AOIVBin.getValue())
+                        self.camera_controller.AOIVBin.getValue())
                     QtWidgets.QApplication.processEvents()
 
                 if param.name() == 'bin_x':
-                    self.controller.AOIHBin.setValue(param.value())
+                    self.camera_controller.AOIHBin.setValue(param.value())
                     # self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(
                     #     self.controller.AOIWidth.getValue())
                     QtWidgets.QApplication.processEvents()
 
                 if param.name() == 'bin_y':
-                    self.controller.AOIVBin.setValue(param.value())
+                    self.camera_controller.AOIVBin.setValue(param.value())
                     # self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(
                     #     self.controller.AOIHeight.getValue())
                     QtWidgets.QApplication.processEvents()
@@ -182,39 +182,40 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                     #param.setValue(False)
                     #self.setup_image()
                     self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(
-                        self.controller.AOIWidth.max())
+                        self.camera_controller.AOIWidth.max())
                     # self.send_param_status(self.settings.child('camera_settings', 'image_settings', 'im_width'),
                     #                        [(self.settings.child('camera_settings', 'image_settings', 'im_width'),
                     #                         'value', self.controller.AOIWidth.max())])
 
                     self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(
-                        self.controller.AOIHeight.max())
+                        self.camera_controller.AOIHeight.max())
 
                 self.setup_image()
                 QtWidgets.QApplication.processEvents()
                 #self.set_image_area()
 
-            elif param.name() in iter_children(self.settings.child('temperature_settings'), []):
+            elif param.name() in iter_children(self.settings.child('camera_settings', 'temperature_settings'), []):
                 self.setup_temperature()
 
             elif param.name() == 'soft_trigger':
                 if param.value():
-                    self.controller.SoftwareTrigger()
+                    self.camera_controller.SoftwareTrigger()
                     param.setValue(False)
 
-            elif param.name() in iter_children(self.settings.child('trigger'), []):
+            elif param.name() in iter_children(self.settings.child('camera_settings', 'trigger'), []):
                 self.set_trigger()
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
 
     def set_trigger(self):
-        self.controller.TriggerMode.setString(self.settings.child('trigger', 'trigger_mode').value())
-        if 'External' in self.controller.TriggerMode.getString():
-            self.controller.ExternalTriggerDelay.setValue(
-                self.settings.child('trigger', 'ext_trigger_delay').value() / 1000)
-            self.settings.child('trigger',
-                                'ext_trigger_delay').setValue(self.controller.ExternalTriggerDelay.getValue() * 1000)
+        self.camera_controller.TriggerMode.setString(self.settings.child('camera_settings',
+                                                                         'trigger', 'trigger_mode').value())
+        if 'External' in self.camera_controller.TriggerMode.getString():
+            self.camera_controller.ExternalTriggerDelay.setValue(
+                self.settings.child('camera_settings', 'trigger', 'ext_trigger_delay').value() / 1000)
+            self.settings.child('camera_settings', 'trigger',
+                                'ext_trigger_delay').setValue(self.camera_controller.ExternalTriggerDelay.getValue() * 1000)
 
 
     def emit_data(self, buffer_pointer):
@@ -237,7 +238,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
             Nx = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
             Ny = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
-            data = self.controller.get_image_fom_buffer(Nx, Ny, self.buffers[self.current_buffer]).T
+            data = self.camera_controller.get_image_fom_buffer(Nx, Ny, self.buffers[self.current_buffer]).T
             cam_name = self.settings.child('camera_settings', 'camera_model').value()
 
             if self.n_grabed_data % self.Naverage == 0:
@@ -265,7 +266,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                     self.data_grabed_signal_temp.emit([
                         DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
 
-            self.controller.queue_single_buffer(self.buffers[self.current_buffer])
+            self.camera_controller.queue_single_buffer(self.buffers[self.current_buffer])
 
 
         except Exception as e:
@@ -279,20 +280,27 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.y_axis = self.get_yaxis()
 
     def setup_image(self):
-        binnings = self.controller.AOIBinning.getAvailableValues()
+        binnings = self.camera_controller.AOIBinning.getAvailableValues()
         self.settings.child('camera_settings', 'image_settings', 'binning').setLimits(binnings)
         self.settings.child('camera_settings', 'image_settings', 'bin_x').setLimits(
-            (self.controller.AOIHBin.min(), self.controller.AOIHBin.max()))
+            (self.camera_controller.AOIHBin.min(), self.camera_controller.AOIHBin.max()))
         self.settings.child('camera_settings', 'image_settings', 'bin_y').setLimits(
-            (self.controller.AOIVBin.min(), self.controller.AOIVBin.max()))
+            (self.camera_controller.AOIVBin.min(), self.camera_controller.AOIVBin.max()))
         self.settings.child('camera_settings', 'image_settings', 'im_left').setLimits(
-            (self.controller.AOILeft.min(), self.controller.AOILeft.max()))
+            (self.camera_controller.AOILeft.min(), self.camera_controller.AOILeft.max()))
         self.settings.child('camera_settings', 'image_settings', 'im_top').setLimits(
-            (self.controller.AOITop.min(), self.controller.AOITop.max()))
+            (self.camera_controller.AOITop.min(), self.camera_controller.AOITop.max()))
         self.settings.child('camera_settings', 'image_settings', 'im_width').setLimits(
-            (self.controller.AOIWidth.min(), self.controller.AOIWidth.max()))
+            (self.camera_controller.AOIWidth.min(), self.camera_controller.AOIWidth.max()))
         self.settings.child('camera_settings', 'image_settings', 'im_height').setLimits(
-            (self.controller.AOIHeight.min(), self.controller.AOIHeight.max()))
+            (self.camera_controller.AOIHeight.min(), self.camera_controller.AOIHeight.max()))
+
+    def get_ROI_size_x(self):
+        return self.settings.child('camera_settings', 'image_settings', 'im_width').value()
+
+    def get_pixel_size(self):
+        """Get the Macro pixel size"""
+        return self.camera_controller.PixelWidth.getValue() * self.camera_controller.AOIHBin.getValue()
 
     def set_image_area(self):
 
@@ -302,13 +310,13 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         height = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
 
         # first set width and height as it modifies the possible top and left
-        self.controller.AOIWidth.setValue(width)
-        self.controller.AOIHeight.setValue(height)
-        self.controller.AOITop.setValue(top)
-        self.controller.AOILeft.setValue(left)
+        self.camera_controller.AOIWidth.setValue(width)
+        self.camera_controller.AOIHeight.setValue(height)
+        self.camera_controller.AOITop.setValue(top)
+        self.camera_controller.AOILeft.setValue(left)
 
         self.settings.child('camera_settings', 'image_settings',
-                            'readout_time').setValue(self.controller.ReadoutTime.getValue() * 1000)
+                            'readout_time').setValue(self.camera_controller.ReadoutTime.getValue() * 1000)
 
     def ini_detector(self, controller=None):
         """
@@ -334,10 +342,10 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 if controller is None:
                     raise Exception('no controller has been defined externally while this detector is a slave one')
                 else:
-                    self.controller = controller
+                    self.camera_controller = controller
             else:
                 model = self.settings.child('camera_settings', 'camera_model')
-                self.controller = api.AndorCamera(model.opts['limits'].index(model.value()))
+                self.camera_controller = api.AndorCamera(model.opts['limits'].index(model.value()))
 
             self.ini_camera()
 
@@ -347,7 +355,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             self.status.x_axis = self.x_axis
             self.status.y_axis = self.y_axis
             self.status.initialized = True
-            self.status.controller = self.controller
+            self.status.controller = self.camera_controller
             self.emit_status(ThreadCommand('close_splash'))
             return self.status
 
@@ -358,13 +366,13 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             return self.status
 
     def setup_temperature(self):
-        enable = self.settings.child('temperature_settings', 'enable_cooling').value()
-        self.controller.SensorCooling.setValue(enable)
+        enable = self.settings.child('camera_settings', 'temperature_settings', 'enable_cooling').value()
+        self.camera_controller.SensorCooling.setValue(enable)
         if not self.temperature_timer.isActive():
             self.temperature_timer.start(2000)  # Timer event fired every 2s
         if enable:
-            if self.controller.TemperatureControl.isWritable():
-                self.controller.TemperatureControl.setString(self.settings.child('temperature_settings', 'set_point').value())
+            if self.camera_controller.TemperatureControl.isWritable():
+                self.camera_controller.TemperatureControl.setString(self.settings.child('camera_settings', 'temperature_settings', 'set_point').value())
             self.update_temperature()
             # set timer to update temperature info from controller
 
@@ -373,26 +381,26 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         update temperature status and value. Fired using the temperature_timer every 2s when not grabbing
         """
-        temp = self.controller.SensorTemperature.getValue()
-        status = self.controller.TemperatureStatus.getString()
-        self.settings.child('temperature_settings', 'current_value').setValue(temp)
-        self.settings.child('temperature_settings', 'status').setValue(status)
+        temp = self.camera_controller.SensorTemperature.getValue()
+        status = self.camera_controller.TemperatureStatus.getString()
+        self.settings.child('camera_settings', 'temperature_settings', 'current_value').setValue(temp)
+        self.settings.child('camera_settings', 'temperature_settings', 'status').setValue(status)
 
 
 
     def ini_camera(self):
         sdk3cam.camReg.regCamera()
-        self.controller.init_camera()
+        self.camera_controller.init_camera()
 
-        if not self.controller.FullAOIControl.getValue():
+        if not self.camera_controller.FullAOIControl.getValue():
             self.settings.child('camera_settings', 'image_settings').opts(readonly=True)
 
         self.settings.child('camera_settings', 'encoding').setOpts(
-            limits=self.controller.SimplePreAmpGainControl.getAvailableValues())
-        self.settings.child('camera_settings', 'encoding').setValue(self.controller.SimplePreAmpGainControl.getString())
+            limits=self.camera_controller.SimplePreAmpGainControl.getAvailableValues())
+        self.settings.child('camera_settings', 'encoding').setValue(self.camera_controller.SimplePreAmpGainControl.getString())
 
         # %%%%%% Get image size and current binning
-        self.SIZEX, self.SIZEY = self.controller.GetCCDWidth(), self.controller.GetCCDHeight()
+        self.SIZEX, self.SIZEY = self.camera_controller.GetCCDWidth(), self.camera_controller.GetCCDHeight()
         self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(self.SIZEY)
         self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(self.SIZEX)
         self.settings.child('camera_settings', 'image_settings', 'im_left').setValue(1)
@@ -402,18 +410,18 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         #
         # get max exposure range
 
-        self.settings.child('camera_settings', 'exposure').setLimits((self.controller.ExposureTime.min() * 1000,
-                                                                      self.controller.ExposureTime.max() * 1000))
+        self.settings.child('camera_settings', 'exposure').setLimits((self.camera_controller.ExposureTime.min() * 1000,
+                                                                      self.camera_controller.ExposureTime.max() * 1000))
 
         self.setup_image()
 
         # %%%%%%% Set and Get temperature from camera
         # get temperature range
-        statuses = self.controller.TemperatureStatus.getAvailableValues()
-        self.settings.child('temperature_settings', 'status').setOpts(limits=statuses)
-        values = self.controller.TemperatureControl.getAvailableValues()
-        self.settings.child('temperature_settings', 'set_point').setOpts(limits=values,
-                                                            readonly=self.controller.TemperatureControl.isReadonly())
+        statuses = self.camera_controller.TemperatureStatus.getAvailableValues()
+        self.settings.child('camera_settings', 'temperature_settings', 'status').setOpts(limits=statuses)
+        values = self.camera_controller.TemperatureControl.getAvailableValues()
+        self.settings.child('camera_settings', 'temperature_settings', 'set_point').setOpts(limits=values,
+                                                                         readonly=self.camera_controller.TemperatureControl.isReadonly())
         self.setup_temperature()
 
         self.setup_trigger()
@@ -427,7 +435,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             if self.callback_thread.isRunning():
                 self.callback_thread.terminate()
 
-        callback = AndorCallback(self.controller.wait_buffer)
+        callback = AndorCallback(self.camera_controller.wait_buffer)
         self.callback_thread = QtCore.QThread()
         callback.moveToThread(self.callback_thread)
         callback.data_sig.connect(
@@ -439,21 +447,23 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.callback_thread.start()
 
     def setup_trigger(self):
-        self.settings.child('trigger', 'trigger_mode').setLimits(self.controller.TriggerMode.getAvailableValues())
-        self.settings.child('trigger', 'ext_trigger_delay').setLimits((self.controller.ExternalTriggerDelay.min(),
-                                                                       self.controller.ExternalTriggerDelay.max()))
+        self.settings.child('camera_settings', 'trigger',
+                            'trigger_mode').setLimits(self.camera_controller.TriggerMode.getAvailableValues())
+        self.settings.child('camera_settings', 'trigger',
+                            'ext_trigger_delay').setLimits((self.camera_controller.ExternalTriggerDelay.min(),
+                                                            self.camera_controller.ExternalTriggerDelay.max()))
         self.set_trigger()
 
     def setup_shutter(self):
-        modes = self.controller.ShutterMode.getAvailableValues()
-        output_modes = self.controller.ShutterOutputMode.getAvailableValues()
-        self.settings.child('shutter', 'shutter_mode').setOpts(limits=modes)
-        self.settings.child('shutter', 'shutter_on_ext_trigger').setOpts(limits=output_modes)
+        modes = self.camera_controller.ShutterMode.getAvailableValues()
+        output_modes = self.camera_controller.ShutterOutputMode.getAvailableValues()
+        self.settings.child('camera_settings', 'shutter', 'shutter_mode').setOpts(limits=modes)
+        self.settings.child('camera_settings', 'shutter', 'shutter_on_ext_trigger').setOpts(limits=output_modes)
         self.set_shutter()
 
     def set_shutter(self):
-        self.controller.ShutterMode.setString(self.settings.child('shutter', 'shutter_mode').value())
-        self.controller.ShutterOutputMode.setString(self.settings.child('shutter', 'shutter_on_ext_trigger').value())
+        self.camera_controller.ShutterMode.setString(self.settings.child('camera_settings', 'shutter', 'shutter_mode').value())
+        self.camera_controller.ShutterOutputMode.setString(self.settings.child('camera_settings', 'shutter', 'shutter_on_ext_trigger').value())
 
     def close(self):
         """
@@ -461,7 +471,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         self.temperature_timer.stop()
         QtWidgets.QApplication.processEvents()
-        self.controller.close()
+        self.camera_controller.close()
 
     def get_xaxis(self):
         """
@@ -472,7 +482,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             1D numpy array
                 Contains a vector of integer corresponding to the horizontal camera pixels.
         """
-        if self.controller is not None:
+        if self.camera_controller is not None:
             # if self.control_type == "camera":
             Nx = self.settings.child('camera_settings', 'image_size', 'Nx').value()
             self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=np.int), label='Pixels')
@@ -491,7 +501,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             1D numpy array
                 Contains a vector of integer corresponding to the vertical camera pixels.
         """
-        if self.controller is not None:
+        if self.camera_controller is not None:
             Ny = self.settings.child('camera_settings', 'image_size', 'Ny').value()
             self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=np.int), label='Pixels')
             self.emit_y_axis()
@@ -509,10 +519,10 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
     def prepare_data(self):
         sizex = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
         sizey = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
-        if sizex != self.controller.AOIWidth.getValue():
+        if sizex != self.camera_controller.AOIWidth.getValue():
             logger.error("Memory size doesn't correspond to image size")
             return False
-        if sizey != self.controller.AOIHeight.getValue():
+        if sizey != self.camera_controller.AOIHeight.getValue():
             logger.error("Memory size doesn't correspond to image size")
             return False
 
@@ -520,12 +530,12 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         image_size = sizex * sizey
         self.data = np.zeros((sizey, sizex), dtype=np.float)
 
-        bufSize = self.controller.ImageSizeBytes.getValue()
+        bufSize = self.camera_controller.ImageSizeBytes.getValue()
 
         if not self.buffers or self.buffers[0].size != bufSize:
             if not not self.buffers:
                 self.free_buffers()
-                self.controller.flush()
+                self.camera_controller.flush()
 
             self.current_buffer = -1
             self.buffers = []
@@ -534,7 +544,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             for ind in range(self.Nbuffers):
                 self.buffers.append(zeros_aligned(bufSize, 8, 'uint8'))
                 self.buffers_pointer.append(self.buffers[-1].ctypes.data)
-                self.controller.queue_single_buffer(self.buffers[-1])
+                self.camera_controller.queue_single_buffer(self.buffers[-1])
 
         data_shape = 'Data2D' if sizey != 1 else 'Data1D'
         if data_shape != self.data_shape:
@@ -573,17 +583,17 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             self.start_time = perf_counter()
             self.temperature_timer.stop()
 
-            if self.controller.CameraAcquiring.getValue():
-                self.controller.AcquisitionStop()
+            if self.camera_controller.CameraAcquiring.getValue():
+                self.camera_controller.AcquisitionStop()
 
             self.set_image_area()
             status = self.prepare_data()
             if not status:
                 return
 
-            self.controller.CycleMode.setString('Continuous')
+            self.camera_controller.CycleMode.setString('Continuous')
 
-            self.controller.AcquisitionStart()
+            self.camera_controller.AcquisitionStart()
             if self.live:
                     self.start_waitloop.emit(-1, self.wait_time)  # will trigger the waitfor acquisition
             else:
@@ -597,8 +607,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         try:
             self.stop_waitloop.emit()
-            if self.controller.CameraAcquiring.getValue():
-                self.controller.AcquisitionStop()
+            if self.camera_controller.CameraAcquiring.getValue():
+                self.camera_controller.AcquisitionStop()
             QtWidgets.QApplication.processEvents()
             self.temperature_timer.start(2000)
 

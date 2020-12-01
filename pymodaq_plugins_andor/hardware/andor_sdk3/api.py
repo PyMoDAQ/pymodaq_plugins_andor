@@ -133,29 +133,6 @@ class AndorBase(sdk3cam.SDK3Camera):
     def GetCCDHeight(self):
         return self.SensorHeight.getValue()
 
-    def SetHorizBin(*args):
-        raise Exception('Not implemented yet!!')
-
-    def GetHorizBin(*args):
-        return 0
-        # raise Exception, 'Not implemented yet!!'
-
-    def GetHorzBinValue(*args):
-        raise Exception('Not implemented yet!!')
-
-    def SetVertBin(*args):
-        raise Exception('Not implemented yet!!')
-
-    def GetVertBin(*args):
-        return 0
-        # raise Exception, 'Not implemented yet!!'
-
-    def GetNumberChannels(*args):
-        raise Exception('Not implemented yet!!')
-
-    def GetElectrTemp(*args):
-        return 25
-
     def GetCCDTemp(self):
         # for some reason querying the temperature takes a lot of time - do it less often
         # return self.SensorTemperature.getValue()
@@ -270,6 +247,9 @@ class AndorCamera(AndorBase):
         self.AOIBinning = sdk3cam.ATEnum()
         self.AOIHBin = sdk3cam.ATInt()
         self.AOIVBin = sdk3cam.ATInt()
+
+        self.PixelWidth = sdk3cam.ATFloat()
+        self.PixelHeight = sdk3cam.ATFloat()
 
         self.AccumulateCount = sdk3cam.ATInt()
         self.BaselineLevel = sdk3cam.ATInt()

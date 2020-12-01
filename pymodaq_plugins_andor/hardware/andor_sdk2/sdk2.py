@@ -399,8 +399,6 @@ class AndorSDK:
             error (str): error as a string
         '''
         error = _dll.WaitForAcquisition()
-        if error != 20002:
-            raise IOError(ERROR_CODE[error])
         return ERROR_CODE[error]
 
     def CancelWait(self):

@@ -136,7 +136,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
         self.x_axis = None
         self.y_axis = None
-        self.controller = None
+        self.camera_controller = None
         self.data = None
         self.CCDSIZEX, self.CCDSIZEY = (None, None)
         self.data_pointer = None
@@ -164,14 +164,14 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         """
         try:
             if param.name() == 'set_point':
-                self.controller.SetTemperature(param.value())
+                self.camera_controller.SetTemperature(param.value())
 
             elif param.name() == 'readout' or param.name() in iter_children(self.settings.child('camera_settings', 'readout_settings')):
                 self.update_read_mode()
                 
             elif param.name() == 'exposure':
-                self.controller.SetExposureTime(self.settings.child('camera_settings','exposure').value()/1000) #temp should be in s
-                (err, timings) = self.controller.GetAcquisitionTimings()
+                self.camera_controller.SetExposureTime(self.settings.child('camera_settings', 'exposure').value() / 1000) #temp should be in s
+                (err, timings) = self.camera_controller.GetAcquisitionTimings()
                 self.settings.child('camera_settings', 'exposure').setValue(timings['exposure']*1000)
                 QtWidgets.QApplication.processEvents()
                 self.get_exposure_ms()
@@ -201,7 +201,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             self.ind_grabbed += 1
             sizey = self.settings.child('camera_settings', 'image_size', 'Ny').value()
             sizex = self.settings.child('camera_settings', 'image_size', 'Nx').value()
-            self.controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
+            self.camera_controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
             self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
                                                           data=[np.squeeze(
                                                               self.data.reshape((sizey, sizex)).astype(np.float))],
@@ -214,7 +214,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
     def update_read_mode(self):
         read_mode = Andor_Camera_ReadOut[self.settings.child('camera_settings', 'readout').value()].value
-        err = self.controller.SetReadMode(read_mode)
+        err = self.camera_controller.SetReadMode(read_mode)
         if err != 'DRV_SUCCESS':
             self.emit_status(ThreadCommand('Update_Status',[err,'log']))
         else:
@@ -256,7 +256,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                 err = 'Croped mode not implemented yet'
             self.emit_status(ThreadCommand('Update_Status',[err,'log']))
             
-            (err, timings) = self.controller.GetAcquisitionTimings()
+            (err, timings) = self.camera_controller.GetAcquisitionTimings()
             self.settings.child('camera_settings', 'exposure').setValue(timings['exposure']*1000)
 
             self.x_axis = self.get_xaxis()
@@ -267,7 +267,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         N = self.settings.child('camera_settings', 'readout_settings', 'mt_settings', 'mt_N').value()
         height = self.settings.child('camera_settings', 'readout_settings', 'mt_settings', 'mt_height').value()
         offset = self.settings.child('camera_settings', 'readout_settings', 'mt_settings', 'mt_offset').value()
-        (err, bottom, gap) = self.controller.SetMultiTrack(N, height, offset)
+        (err, bottom, gap) = self.camera_controller.SetMultiTrack(N, height, offset)
         self.settings.child('camera_settings', 'readout_settings', 'mt_settings', 'mt_bottom').setValue(bottom)
         self.settings.child('camera_settings', 'readout_settings', 'mt_settings', 'mt_gap').setValue(gap)
         if err == 'DRV_SUCCESS':
@@ -278,7 +278,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
     def set_single_track_area(self):
         center = self.settings.child('camera_settings', 'readout_settings', 'st_settings', 'st_center').value()
         height = self.settings.child('camera_settings', 'readout_settings', 'st_settings', 'st_height').value()
-        err = self.controller.SetSingleTrack(center, height)
+        err = self.camera_controller.SetSingleTrack(center, height)
         if err == 'DRV_SUCCESS':
             self.settings.child('camera_settings', 'image_size', 'Nx').setValue(self.CCDSIZEX)
             self.settings.child('camera_settings', 'image_size', 'Ny').setValue(1)
@@ -294,7 +294,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         endx = self.settings.child('camera_settings', 'readout_settings', 'image_settings', 'im_endx').value()
         starty = self.settings.child('camera_settings', 'readout_settings', 'image_settings', 'im_starty').value()
         endy = self.settings.child('camera_settings', 'readout_settings', 'image_settings', 'im_endy').value()
-        err = self.controller.SetImage(binx, biny, startx, endx, starty, endy)
+        err = self.camera_controller.SetImage(binx, biny, startx, endx, starty, endy)
         if err == 'DRV_SUCCESS':
             self.settings.child('camera_settings', 'image_size', 'Nx').setValue(int((endx-startx+1)/binx))
             self.settings.child('camera_settings', 'image_size', 'Ny').setValue(int((endy-starty+1)/biny))
@@ -325,9 +325,9 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                 if controller is None:
                     raise Exception('no controller has been defined externally while this detector is a slave one')
                 else:
-                    self.controller = controller
+                    self.camera_controller = controller
             else:
-                self.controller = sdk2.AndorSDK()
+                self.camera_controller = sdk2.AndorSDK()
 
             self.emit_status(ThreadCommand('show_splash', ["Set/Get Camera's settings"]))
             self.ini_camera()
@@ -338,7 +338,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             self.status.x_axis = self.x_axis
             self.status.y_axis = self.y_axis
             self.status.initialized = True
-            self.status.controller = self.controller
+            self.status.controller = self.camera_controller
             self.emit_status(ThreadCommand('close_splash'))
             return self.status
 
@@ -348,14 +348,21 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             self.emit_status(ThreadCommand('close_splash'))
             return self.status
 
+    def get_ROI_size_x(self):
+        self.CCDSIZEX, self.CCDSIZEY = self.camera_controller.GetDetector()
+        return self.CCDSIZEX
+
+    def get_pixel_size(self):
+        return self.camera_controller.GetPixelSize()
+
     def ini_camera(self):
         #  %%%%%% Get image size and current binning
         # get info from camera
         model_param = self.settings.child('camera_settings', 'camera_model')
         cam_index = model_param.opts['limits'].index(model_param.value())
-        self.controller.SetCurrentCamera(camera_list[cam_index]['handle'])
+        self.camera_controller.SetCurrentCamera(camera_list[cam_index]['handle'])
 
-        self.CCDSIZEX, self.CCDSIZEY = self.controller.GetDetector()
+        self.CCDSIZEX, self.CCDSIZEY = self.camera_controller.GetDetector()
         self.settings.child('camera_settings', 'readout_settings',
                             'st_settings', 'st_center').setLimits((1, self.CCDSIZEY))
         self.settings.child('camera_settings', 'readout_settings',
@@ -368,7 +375,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                             'im_endx').setOpts(max=self.CCDSIZEX, default=self.CCDSIZEX)
 
         # get max exposure range
-        err, maxexpo = self.controller.GetMaximumExposure()
+        err, maxexpo = self.camera_controller.GetMaximumExposure()
         if err == 'DRV_SUCCESS':
             self.settings.child('camera_settings', 'exposure').setLimits((0, maxexpo))
 
@@ -377,7 +384,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
         # %%%%%%% Set and Get temperature from camera
         # get temperature range
-        (err, temp_range) = self.controller.GetTemperatureRange()
+        (err, temp_range) = self.camera_controller.GetTemperatureRange()
         if err == "DRV_SUCCESS":
             self.settings.child('camera_settings', 'temperature_settings', 'set_point').setLimits(
                 (temp_range[0], temp_range[1]))
@@ -385,19 +392,19 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
         self.set_shutter()
 
-        if not self.controller.IsCoolerOn():  # gets 0 or 1
-            self.controller.CoolerON()
+        if not self.camera_controller.IsCoolerOn():  # gets 0 or 1
+            self.camera_controller.CoolerON()
 
-        self.controller.SetTemperature(
+        self.camera_controller.SetTemperature(
             self.settings.child('camera_settings', 'temperature_settings', 'set_point').value())
-        locked_status, temp = self.controller.GetTemperature()
+        locked_status, temp = self.camera_controller.GetTemperature()
         self.settings.child('camera_settings', 'temperature_settings', 'current_value').setValue(temp)
         self.settings.child('camera_settings', 'temperature_settings', 'locked').setValue(
             locked_status == 'DRV_TEMP_STABILIZED')
         # set timer to update temperature info from controller
         self.timer = self.startTimer(2000)  # Timer event fired every 2s
 
-        callback = AndorCallback(self.controller.WaitForAcquisition)
+        callback = AndorCallback(self.camera_controller.WaitForAcquisition)
         self.callback_thread = QtCore.QThread()
         callback.moveToThread(self.callback_thread)
         callback.data_sig.connect(self.emit_data)  # when the wait for acquisition returns (with data taken), emit_data will be fired
@@ -413,14 +420,14 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         mode = self.settings.child('camera_settings', 'shutter', 'shutter_mode').opts['limits'].index(
                                         self.settings.child('camera_settings', 'shutter', 'shutter_mode').value())
 
-        self.controller.SetShutter(typ, mode, self.settings.child('camera_settings', 'shutter', 'shutter_closing_time').value(),
-                                   self.settings.child('camera_settings', 'shutter', 'shutter_opening_time').value())
+        self.camera_controller.SetShutter(typ, mode, self.settings.child('camera_settings', 'shutter', 'shutter_closing_time').value(),
+                                          self.settings.child('camera_settings', 'shutter', 'shutter_opening_time').value())
 
     def timerEvent(self, event):
         """
 
         """
-        locked_status, temp = self.controller.GetTemperature()
+        locked_status, temp = self.camera_controller.GetTemperature()
         self.settings.child('camera_settings', 'temperature_settings', 'current_value').setValue(temp)
         self.settings.child('camera_settings', 'temperature_settings', 'locked').setValue(
             locked_status == 'DRV_TEMP_STABILIZED')
@@ -430,16 +437,16 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
         """
 
-        err, temp = self.controller.GetTemperature()
+        err, temp = self.camera_controller.GetTemperature()
         print(temp)
         if temp < -20.:
             print(
                 "Camera temperature is still at {:d}°C. Closing it now may damage it! The cooling will be maintained "
                 "while shutting down camera. Keep it power plugged!!!".format(
                     temp))
-            self.controller.SetCoolerMode(1)
+            self.camera_controller.SetCoolerMode(1)
         self.timer.stop()
-        self.controller.close()
+        self.camera_controller.close()
 
     def get_xaxis(self):
         """
@@ -450,7 +457,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             1D numpy array
                 Contains a vector of integer corresponding to the horizontal camera pixels.
         """
-        if self.controller is not None:
+        if self.camera_controller is not None:
             # if self.control_type == "camera":
             Nx = self.settings.child('camera_settings', 'image_size', 'Nx').value()
             self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=np.int), label='Pixels')
@@ -469,7 +476,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             1D numpy array
                 Contains a vector of integer corresponding to the vertical camera pixels.
         """
-        if self.controller is not None:
+        if self.camera_controller is not None:
 
             Ny = self.settings.child('camera_settings', 'image_size', 'Ny').value()
             self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=np.int), label='Pixels')
@@ -519,17 +526,17 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
             self.prepare_data()
             if Naverage == 1:
-                self.controller.SetAcquisitionMode(1)
+                self.camera_controller.SetAcquisitionMode(1)
             else:
-                self.controller.SetAcquisitionMode(2)
-                self.controller.SetNumberAccumulations(Naverage)
+                self.camera_controller.SetAcquisitionMode(2)
+                self.camera_controller.SetNumberAccumulations(Naverage)
 
-            self.controller.SetExposureTime(
+            self.camera_controller.SetExposureTime(
                 self.settings.child('camera_settings', 'exposure').value() / 1000)  # temp should be in s
-            (err, timings) = self.controller.GetAcquisitionTimings()
+            (err, timings) = self.camera_controller.GetAcquisitionTimings()
             self.settings.child('camera_settings', 'exposure').setValue(timings['exposure'] * 1000)
             # %%%%% Start acquisition with the given exposure in ms, in "1d" or "2d" mode
-            self.controller.StartAcquisition()
+            self.camera_controller.StartAcquisition()
             self.callback_signal.emit()  # will trigger the waitfor acquisition
 
         except Exception as e:
@@ -540,9 +547,9 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             stop the camera's actions.
         """
         try:
-            self.controller.CancelWait()  # first cancel the waitacquistion (if any)
+            self.camera_controller.CancelWait()  # first cancel the waitacquistion (if any)
             QtWidgets.QApplication.processEvents()
-            self.controller.AbortAcquisition()  # abort the camera actions
+            self.camera_controller.AbortAcquisition()  # abort the camera actions
 
         except:
             pass

@@ -92,7 +92,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
 
     def setCalibration(self):
         #setNpixels
-        width = self.get_pixel_size()
+        width, height = self.get_pixel_size()
         err = self.shamrock_controller.SetNumberPixelsSR(0, self.get_ROI_size_x())
         err = self.shamrock_controller.SetPixelWidthSR(0, width)
 

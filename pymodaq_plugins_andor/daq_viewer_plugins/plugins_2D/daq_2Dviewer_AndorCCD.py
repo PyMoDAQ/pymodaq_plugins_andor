@@ -353,7 +353,12 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         return self.CCDSIZEX
 
     def get_pixel_size(self):
-        return self.camera_controller.GetPixelSize()
+        err, (width, height) = self.camera_controller.GetPixelSize()
+        if err == 'DRV_SUCCESS':
+            return width, height
+        else:
+            pass
+        return 0., 0.
 
     def ini_camera(self):
         #  %%%%%% Get image size and current binning

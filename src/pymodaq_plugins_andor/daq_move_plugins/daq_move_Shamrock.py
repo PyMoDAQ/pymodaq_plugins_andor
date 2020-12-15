@@ -13,17 +13,9 @@ libpath = shamrock_sdk.dllpath
 
 
 class DAQ_Move_Shamrock(DAQ_Move_base):
-    """
-        Base class for Shamrock Spectrometer spectrometer
 
-
-        =============== ==================
-        **Attributes**   **Type**
-
-        =============== ==================
-    """
     _controller_units = 'nm'
-    is_multiaxes = False  # set to True if this plugin is controlled for a multiaxis controller (with a unique communication link)
+    is_multiaxes = False
     stage_names = []  # "list of strings of the multiaxes
 
     params = [
@@ -53,11 +45,11 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
                 'values': ['Master', 'Slave']},
             {'title': 'Axis:', 'name': 'axis', 'type': 'list', 'values': stage_names},
 
-        ]}] + comon_parameters
+        ]}] + \
+        comon_parameters
 
     def __init__(self, parent=None, params_state=None):
-
-        super().__init__(parent, params_state)  # initialize base class with commom attributes and methods
+        super().__init__(parent, params_state)  # initialize base class with common attributes and methods
 
     def commit_settings(self, param):
         """
@@ -96,22 +88,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
-
-    def set_wavelength(self, wavelength):
-        self.emit_status(ThreadCommand('show_splash', ["Setting wavelength, please wait!"]))
-        err = self.shamrock_controller.SetWavelengthSR(0, wavelength)
-        self.emit_status(ThreadCommand('close_splash'))
-
-        if err != 'SHAMROCK_SUCCESS':
-            raise IOError(err)
-
-        self.get_wavelength()
-
-    def get_wavelength(self):
-        err, wl = self.shamrock_controller.GetWavelengthSR(0)
-        if err == "SHAMROCK_SUCCESS":
-            self.settings.child('spectro_settings', 'spectro_wl').setValue(wl)
-        return float(wl)
 
     def ini_stage(self, controller=None):
         """Actuator communication initialization
@@ -152,24 +128,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
             self.status.initialized = False
             self.emit_status(ThreadCommand('close_splash'))
             return self.status
-
-    def ini_spectro(self):
-        self.settings.child('spectro_settings', 'spectro_serialnumber').setValue(
-            self.shamrock_controller.GetSerialNumberSR(0)[1].decode())
-
-        # get grating info
-        (err, Ngratings) = self.shamrock_controller.GetNumberGratingsSR(0)
-        self.grating_list = []
-        for ind_grating in range(1, Ngratings + 1):
-            (err, lines, blaze, home, offset) = self.shamrock_controller.GetGratingInfoSR(0, ind_grating)
-            self.grating_list.append(str(int(lines)))
-
-        self.settings.child('spectro_settings', 'grating_settings', 'grating').setLimits(self.grating_list)
-        err, ind_grating = self.shamrock_controller.GetGratingSR(0)
-        self.settings.child('spectro_settings', 'grating_settings', 'grating').setValue(
-            self.grating_list[ind_grating - 1])
-
-        self.get_set_grating(ind_grating - 1)
 
     def check_position(self):
         """Get the current position from the hardware with scaling conversion.
@@ -224,7 +182,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         """
         self.move_Abs(self.settings.child('spectro_settings', 'spectro_wl_home').value())
 
-
     def stop_motion(self):
         """
         Call the specific move_done function (depending on the hardware).
@@ -236,6 +193,46 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
         self.move_done()  # to let the interface know the actuator stopped. Direct call as the setwavelength call is
         # blocking anyway
+
+    def close(self):
+        """
+
+        """
+        self.shamrock_controller.close()
+
+    def set_wavelength(self, wavelength):
+        self.emit_status(ThreadCommand('show_splash', ["Setting wavelength, please wait!"]))
+        err = self.shamrock_controller.SetWavelengthSR(0, wavelength)
+        self.emit_status(ThreadCommand('close_splash'))
+
+        if err != 'SHAMROCK_SUCCESS':
+            raise IOError(err)
+
+        self.get_wavelength()
+
+    def get_wavelength(self):
+        err, wl = self.shamrock_controller.GetWavelengthSR(0)
+        if err == "SHAMROCK_SUCCESS":
+            self.settings.child('spectro_settings', 'spectro_wl').setValue(wl)
+        return float(wl)
+
+    def ini_spectro(self):
+        self.settings.child('spectro_settings', 'spectro_serialnumber').setValue(
+            self.shamrock_controller.GetSerialNumberSR(0)[1].decode())
+
+        # get grating info
+        (err, Ngratings) = self.shamrock_controller.GetNumberGratingsSR(0)
+        self.grating_list = []
+        for ind_grating in range(1, Ngratings + 1):
+            (err, lines, blaze, home, offset) = self.shamrock_controller.GetGratingInfoSR(0, ind_grating)
+            self.grating_list.append(str(int(lines)))
+
+        self.settings.child('spectro_settings', 'grating_settings', 'grating').setLimits(self.grating_list)
+        err, ind_grating = self.shamrock_controller.GetGratingSR(0)
+        self.settings.child('spectro_settings', 'grating_settings', 'grating').setValue(
+            self.grating_list[ind_grating - 1])
+
+        self.get_set_grating(ind_grating - 1)
 
     def get_set_grating(self, ind_grating):
         """
@@ -266,15 +263,3 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
 
         self.emit_status(ThreadCommand('close_splash'))
-
-    def close(self):
-        """
-
-        """
-        self.shamrock_controller.close()
-
-    def stop(self):
-        """
-
-        """
-        return ""

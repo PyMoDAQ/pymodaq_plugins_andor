@@ -1,11 +1,43 @@
-# PyMoDAQ Plugins
+pymodaq_plugins_andor (Andor)
+#############################
 
-PyMoDAQ, Modular Data Acquisition with Python, is a set of **python** modules used to perform automated measurements. 
+.. image:: https://img.shields.io/pypi/v/pymodaq_plugins_andor.svg
+   :target: https://pypi.org/project/pymodaq_plugins_andor/
+   :alt: Latest Version
 
-This repository contains a set of PyMoDAQ plugins for Actuators from Andor Camera (CCD camera using SDK2, SCMOS cameras using SDK3...)
+.. image:: https://readthedocs.org/projects/pymodaq/badge/?version=latest
+   :target: https://pymodaq.readthedocs.io/en/stable/?badge=latest
+   :alt: Documentation Status
 
-For an exhaustive list of the available plugins, see https://github.com/CEMES-CNRS/pymodaq_plugin_manager/blob/main/pymodaq_plugin_manager/doc/PluginList.md
+.. image:: https://github.com/CEMES-CNRS/pymodaq_plugins_andor/workflows/Upload%20Python%20Package/badge.svg
+    :target: https://github.com/CEMES-CNRS/pymodaq_plugins_andor
 
-GitHub repo: https://github.com/CEMES-CNRS
+Set of PyMoDAQ plugins for Andor Camera (CCD camera using SDK2, SCMOS cameras using SDK3...)
 
-Documentation: http://pymodaq.cnrs.fr/
+
+Authors
+=======
+
+* _S. J. Weber
+
+Instruments
+===========
+Below is the list of instruments included in this plugin
+
+Actuators
++++++++++
+
+* **Shamrock**: Shamrock series of spectrometer used as a monochromator
+
+Viewer1D
+++++++++
+
+* **ShamrockCCD**: Shamrock series of spectrometer using the Andor CCD cameras
+* **ShamrockSCMOS**: Shamrock series of spectrometer using the Andor SCMOS cameras
+
+Viewer2D
+++++++++
+
+* **AndorCCD**: Andor CCD camera using the SDK2
+* **AndorSCMOS**: Andor CCD camera using the SDK3
+

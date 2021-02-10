@@ -43,8 +43,8 @@ arch, plat = platform.architecture()
 
 if plat.startswith('Windows'):
     try:
-        _stdcall_libraries['ATCORE'] = ctypes.windll.LoadLibrary('atcore')
-        _stdcall_libraries['ATUTIL'] = ctypes.WinDLL('atutility')
+        _stdcall_libraries['ATCORE'] = ctypes.windll.LoadLibrary(str(Path('C:\\Program Files\\Andor SDK3').joinpath('atcore.dll')))
+        _stdcall_libraries['ATUTIL'] = ctypes.windll.LoadLibrary(str(Path('C:\\Program Files\\Andor SDK3').joinpath('atutility.dll')))
     except OSError as e:
         raise OSError(f'Andor SCMOS atcore and atutlity DLL not found: {str(e)}')
 

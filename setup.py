@@ -41,7 +41,7 @@ setup(
     packages=find_packages(where='./src'),
     package_dir={'': 'src'},
     include_package_data=True,
-    entry_points={'pymodaq.plugins': f'default = {PLUGIN_NAME}'},
+    entry_points={'pymodaq.plugins': f"{config['plugin-info']['SHORT_PLUGIN_NAME']} = {PLUGIN_NAME}"},
     install_requires=['toml', ]+config['plugin-install']['packages-required'],
     **setupOpts
 )

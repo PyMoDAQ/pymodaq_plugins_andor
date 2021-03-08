@@ -89,6 +89,10 @@ class AndorBase(sdk3cam.SDK3Camera):
     def _flush(self):
         sdk3.Flush(self.handle)
 
+    def queue_single_buffer(self, buf):
+        sdk3.QueueBuffer(self.handle, buf.ctypes.data_as(sdk3.POINTER(sdk3.AT_U8)), buf.nbytes)
+
+
     def wait_buffer(self):
         try:
             pData, lData = sdk3.WaitBuffer(self.handle, 0)

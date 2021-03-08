@@ -175,8 +175,8 @@ class SDK3Camera(object):
         self.shutdown()
         camReg.unregCamera()
 
-    def register_callback(self, callback):
-        sdk3.Re
+    # def register_callback(self, callback):
+    #     sdk3.Re
 
 
 

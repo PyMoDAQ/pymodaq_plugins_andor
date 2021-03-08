@@ -54,6 +54,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         {'title': 'Camera Settings:', 'name': 'camera_settings', 'type': 'group', 'children': [
             {'title': 'Camera Models:', 'name': 'camera_model', 'type': 'list', 'values': camera_list},
             {'title': 'Exposure (ms):', 'name': 'exposure', 'type': 'float', 'value': 0.01, 'default': 0.01, 'min': 0},
+            {'title': 'Live refresh time (ms):', 'name': 'refresh_time', 'type': 'int', 'value': 50},
+            {'title': '', 'name': 'reset_buffers', 'type': 'bool_push', 'value': False, 'label': 'Reset Buffers'},
+
             {'title': 'Sensor size:', 'name': 'image_size', 'type': 'group', 'children': [
                 {'title': 'Nx:', 'name': 'Nx', 'type': 'int', 'value': 0, 'default': 0, 'readonly': True},
                 {'title': 'Ny:', 'name': 'Ny', 'type': 'int', 'value': 0, 'default': 0, 'readonly': True},
@@ -101,6 +104,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.buffers = []
         self.buffers_pointer = []
         self.Nbuffers = 5
+        self._reset_buffers_cmd = False
         self.refresh_time = 0.2
 
         self.current_buffer = -1
@@ -145,6 +149,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
             if param.name() == 'set_point':
                 self.camera_controller.SetTemperature(param.value())
+
+            elif param.name() == 'reset_buffers':
+                self._reset_buffers_cmd = True
 
             elif param.name() == 'exposure':
                 self.camera_controller.ExposureTime.setValue(self.settings.child('camera_settings', 'exposure').value() * 1e-3)
@@ -229,12 +236,20 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         try:
             self.current_buffer += 1
             self.n_grabed_data += 1
-            print(f'ind_grabemit:{self.n_grabed_data}')
+            #print(f'ind_grabemit:{self.n_grabed_data}')
             self.current_buffer = self.current_buffer % self.Nbuffers
-            print(f'ind_current_buffer:{self.current_buffer}')
+            #print(f'ind_current_buffer:{self.current_buffer}')
 
             if self.buffers[self.current_buffer].ctypes.data != buffer_pointer[0]:
-                raise RuntimeError('Returned buffer not equal to expected buffer')
+                self.emit_status(ThreadCommand('Update_Status',
+                                               ['Returned buffer not equal to expected buffer, stopping acquisition and'
+                                                ' freeing buffers', 'log']))
+                logger.warning('Returned buffer not equal to expected buffer, stopping acquisition and freeing buffers')
+                self._reset_buffers_cmd = True
+                self.emit_status(ThreadCommand('stop'))
+                QtWidgets.QApplication.processEvents()
+                self.data_grabed_signal.emit([
+                    DataFromPlugins(name=cam_name, data=[np.zeros(data.shape)], dim=self.data_shape)])
 
             Nx = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
             Ny = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
@@ -259,18 +274,21 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                         self.data_grabed_signal_temp.emit([
                             DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
             else:
-                if self.n_grabed_data % self.Naverage == 0:
-                    self.data_grabed_signal.emit([
-                        DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
-                else:
-                    self.data_grabed_signal_temp.emit([
-                        DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
+                if perf_counter() - self.start_time > self.settings.child('camera_settings',
+                                                                          'refresh_time').value() / 1000:
+                    if self.n_grabed_data % self.Naverage == 0:
+                        self.data_grabed_signal.emit([
+                            DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
+                    else:
+                        self.data_grabed_signal_temp.emit([
+                            DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
+                    self.start_time = perf_counter()
 
             self.camera_controller.queue_single_buffer(self.buffers[self.current_buffer])
 
 
         except Exception as e:
-            self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
+            logger.exception(str(e))
 
     def update_read_mode(self):
 
@@ -531,11 +549,12 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.data = np.zeros((sizey, sizex), dtype=np.float)
 
         bufSize = self.camera_controller.ImageSizeBytes.getValue()
-
-        if not self.buffers or self.buffers[0].size != bufSize:
+        if not self.buffers or self.buffers[0].size != bufSize or self._reset_buffers_cmd:
             if not not self.buffers:
                 self.free_buffers()
                 self.camera_controller.flush()
+                self._reset_buffers_cmd = False
+                self.settings.child('camera_settings', 'reset_buffers').setValue(False)
 
             self.current_buffer = -1
             self.buffers = []
@@ -580,7 +599,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 self.wait_time = kwargs['wait_time']
 
             self.n_grabed_data = 0
-            self.start_time = perf_counter()
+            self.start_time = perf_counter()  # to check if one should refresh output
             self.temperature_timer.stop()
 
             if self.camera_controller.CameraAcquiring.getValue():
@@ -649,7 +668,7 @@ class AndorCallback(QtCore.QObject):
             pData = self.wait_fn()
             if not not pData:
                 ind_grab += 1
-                print(f'ind_grab_thread:{ind_grab}')
+                #print(f'ind_grab_thread:{ind_grab}')
                 self.data_sig.emit([pData])
                 QtCore.QThread.msleep(wait_time)
 

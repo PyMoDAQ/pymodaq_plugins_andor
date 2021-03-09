@@ -35,16 +35,19 @@ import sys
 import ctypes
 import platform
 from pathlib import Path
+import os
 _stdcall_libraries = {}
 
 arch, plat = platform.architecture()
 
-
+sdk_path = 'C:\\Program Files\\Andor SDK3'
 
 if plat.startswith('Windows'):
     try:
-        _stdcall_libraries['ATCORE'] = ctypes.windll.LoadLibrary(str(Path('C:\\Program Files\\Andor SDK3').joinpath('atcore.dll')))
-        _stdcall_libraries['ATUTIL'] = ctypes.windll.LoadLibrary(str(Path('C:\\Program Files\\Andor SDK3').joinpath('atutility.dll')))
+        if sdk_path not in os.environ['path']:
+            os.environ['path'] += ';' + sdk_path
+        _stdcall_libraries['ATCORE'] = ctypes.windll.LoadLibrary('atcore.dll')
+        _stdcall_libraries['ATUTIL'] = ctypes.windll.LoadLibrary('atutility.dll')
     except OSError as e:
         raise OSError(f'Andor SCMOS atcore and atutlity DLL not found: {str(e)}')
 

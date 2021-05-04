@@ -221,6 +221,10 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.camera_controller.TriggerMode.setString(self.settings.child('camera_settings',
                                                                          'trigger', 'trigger_mode').value())
         if 'External' in self.camera_controller.TriggerMode.getString():
+            self.settings.child('camera_settings', 'trigger',
+                                'ext_trigger_delay').setLimits((self.camera_controller.ExternalTriggerDelay.min(),
+                                                                self.camera_controller.ExternalTriggerDelay.max()))
+
             self.camera_controller.ExternalTriggerDelay.setValue(
                 self.settings.child('camera_settings', 'trigger', 'ext_trigger_delay').value() / 1000)
             self.settings.child('camera_settings', 'trigger',

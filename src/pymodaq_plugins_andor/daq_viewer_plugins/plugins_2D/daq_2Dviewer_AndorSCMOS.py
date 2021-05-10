@@ -269,7 +269,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             Ny = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
             data = self.camera_controller.get_image_fom_buffer(Nx, Ny, self.buffers[self.current_buffer]).T
 
-            if self.n_grabed_data % self.Naverage == 0:
+            if self.n_grabed_data % self.Naverage == 0 and self.live:
                 self.data = 1 / self.Naverage * data
             else:
                 self.data += 1 / self.Naverage * data
@@ -278,14 +278,15 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 if self.n_grabed_data > self.Naverage:
                     self.stop()
                 else:
-                    self.data += 1 / self.Naverage * data
+                    #self.data += 1 / self.Naverage * data
                     if self.n_grabed_data == self.Naverage:
                         self.data_grabed_signal.emit([
                             DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
 
                     elif self.n_grabed_data < self.Naverage:
                         self.data_grabed_signal_temp.emit([
-                            DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
+                            DataFromPlugins(name=cam_name, data=[self.data * self.Naverage / self.n_grabed_data],
+                                            dim=self.data_shape)])
             else:  # in live mode
                 if perf_counter() - self.start_time > self.refresh_time_fr / 1000:  # refresh the frame rate every
                     # refresh_time_fr ms
@@ -298,8 +299,14 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                     self.data_grabed_signal.emit([
                         DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
                 else:
+                    if self.n_grabed_data % self.Naverage != 0:
+                        n_grabed = self.n_grabed_data % self.Naverage
+                    else:
+                        n_grabed = self.Naverage
                     self.data_grabed_signal_temp.emit([
-                        DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape)])
+                        DataFromPlugins(name=cam_name,
+                                        data=[self.data * self.Naverage / n_grabed],
+                                        dim=self.data_shape)])
 
             self.camera_controller.queue_single_buffer(self.buffers[self.current_buffer])
 

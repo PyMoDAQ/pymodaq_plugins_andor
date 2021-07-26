@@ -1,7 +1,7 @@
 from ..plugins_2D.daq_2Dviewer_AndorCCD import DAQ_2DViewer_AndorCCD
 from ...daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
 import numpy as np
-from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, Axis
+from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, Axis, DataFromPlugins
 from pymodaq.daq_utils.parameter import utils as putils
 from PyQt5 import QtWidgets
 
@@ -158,6 +158,26 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         DAQ_Move_Shamrock.stop(self)
 
     def grab_data(self, Naverage=1, **kwargs):
-        DAQ_2DViewer_AndorCCD.grab_data(self, Naverage, **kwargs)
         if not self.is_calibrated:
             self.get_xaxis()
+        DAQ_2DViewer_AndorCCD.grab_data(self, Naverage, **kwargs)
+
+    def emit_data(self):
+        """
+            overloadded function from DAQ_2DViewer_AndorCCD
+        """
+        try:
+            self.ind_grabbed += 1
+            sizey = self.settings.child('camera_settings', 'image_size', 'Ny').value()
+            sizex = self.settings.child('camera_settings', 'image_size', 'Nx').value()
+            self.camera_controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
+            self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
+                                                          data=[np.squeeze(
+                                                              self.data.reshape((sizey, sizex)).astype(np.float))],
+                                                          dim=self.data_shape,
+                                                          x_axis=self.x_axis),])
+            QtWidgets.QApplication.processEvents()  # here to be sure the timeevents are executed even if in continuous grab mode
+
+        except Exception as e:
+            self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
+

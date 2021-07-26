@@ -158,6 +158,90 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamrock):
         DAQ_Move_Shamrock.stop(self)
 
     def grab_data(self, Naverage=1, **kwargs):
-        DAQ_2DViewer_AndorSCMOS.grab_data(self, Naverage, **kwargs)
         if not self.is_calibrated:
             self.get_xaxis()
+        DAQ_2DViewer_AndorSCMOS.grab_data(self, Naverage, **kwargs)
+
+    def emit_data(self, buffer_pointer):
+        """
+            overloadded function from DAQ_2DViewer_AndorScmos
+        """
+        try:
+            buff_temp = buffer_pointer[0]
+            self.current_buffer += 1
+            self.n_grabed_data += 1
+            self.n_grabed_frame_rate += 1
+            #print(f'ind_grabemit:{self.n_grabed_data}')
+            self.current_buffer = self.current_buffer % self._Nbuffers
+            #print(f'ind_current_buffer:{self.current_buffer}')
+
+            if self.buffers[self.current_buffer].ctypes.data != buff_temp:
+                # buff_val = [self.buffers[ind].ctypes.data for ind in range(len(self.buffers))].index(buff_temp)
+                # print(f'Buffer index should be {self.current_buffer} but is in fact {buff_val}')
+                self.stop()
+                QtWidgets.QApplication.processEvents()
+
+                self.emit_status(ThreadCommand('Update_Status',
+                                               ['Returned buffer not equal to expected buffer,'
+                                                ' restarting acquisition and'
+                                                ' freeing buffers', 'log']))
+                logger.warning('Returned buffer not equal to expected buffer, restarting acquisition and'
+                               ' freeing buffers')
+                self._reset_buffers_cmd = True
+                self.grab_data(self.Naverage, live=self.live, wait_time=self.wait_time)
+                return
+
+            cam_name = self.settings.child('camera_settings', 'camera_model').value()
+            Nx = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
+            Ny = self.settings.child('camera_settings', 'image_settings', 'im_height').value()
+            data = self.camera_controller.get_image_fom_buffer(Nx, Ny, self.buffers[self.current_buffer]).T
+
+            if self.n_grabed_data % self.Naverage == 0 and self.live:
+                self.data = 1 / self.Naverage * data
+            else:
+                self.data += 1 / self.Naverage * data
+
+            if not self.live:
+                if self.n_grabed_data > self.Naverage:
+                    self.stop()
+                else:
+                    #self.data += 1 / self.Naverage * data
+                    if self.n_grabed_data == self.Naverage:
+                        self.data_grabed_signal.emit([
+                            DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape,
+                                            x_axis=self.x_axis)])
+
+                    elif self.n_grabed_data < self.Naverage:
+                        self.data_grabed_signal_temp.emit([
+                            DataFromPlugins(name=cam_name, data=[self.data * self.Naverage / self.n_grabed_data],
+                                            dim=self.data_shape,
+                                            x_axis=self.x_axis)])
+            else:  # in live mode
+                if perf_counter() - self.start_time > self.refresh_time_fr / 1000:  # refresh the frame rate every
+                    # refresh_time_fr ms
+                    self.settings.child('camera_settings',
+                                        'frame_rate').setValue(self.n_grabed_frame_rate / (self.refresh_time_fr / 1000))
+                    self.start_time = perf_counter()
+                    self.n_grabed_frame_rate = 0
+
+                if self.n_grabed_data % self.Naverage == 0:
+                    self.data_grabed_signal.emit([
+                        DataFromPlugins(name=cam_name, data=[self.data], dim=self.data_shape,
+                                        x_axis=self.x_axis)])
+                else:
+                    if self.n_grabed_data % self.Naverage != 0:
+                        n_grabed = self.n_grabed_data % self.Naverage
+                    else:
+                        n_grabed = self.Naverage
+                    self.data_grabed_signal_temp.emit([
+                        DataFromPlugins(name=cam_name,
+                                        data=[self.data * self.Naverage / n_grabed],
+                                        dim=self.data_shape,
+                                        x_axis=self.x_axis)])
+
+            self.camera_controller.queue_single_buffer(self.buffers[self.current_buffer])
+
+        except Exception as e:
+            logger.exception(str(e))
+
+

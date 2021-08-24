@@ -18,7 +18,7 @@ Set of PyMoDAQ plugins for Andor Camera (CCD camera using SDK2, SCMOS cameras us
 Authors
 =======
 
-* _S. J. Weber
+* Sébastien. J. Weber
 
 Instruments
 ===========

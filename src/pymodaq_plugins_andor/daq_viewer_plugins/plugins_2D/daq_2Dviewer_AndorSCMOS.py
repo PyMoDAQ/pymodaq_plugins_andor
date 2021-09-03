@@ -638,7 +638,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
             self.camera_controller.AcquisitionStart()
             if self.live:
-                    self.start_waitloop.emit(-1, self.wait_time)  # will trigger the waitfor acquisition
+                self.start_waitloop.emit(-1, self.wait_time)  # will trigger the waitfor acquisition
             else:
                 self.start_waitloop.emit(Naverage, 0)  # will trigger the waitfor acquisition
         except Exception as e:

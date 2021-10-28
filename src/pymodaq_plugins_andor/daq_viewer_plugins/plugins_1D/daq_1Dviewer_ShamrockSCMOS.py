@@ -3,7 +3,7 @@ from ...daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
 import numpy as np
 from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, Axis
 from pymodaq.daq_utils.parameter import utils as putils
-from PyQt5 import QtWidgets
+from qtpy import QtWidgets
 
 
 class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamrock):

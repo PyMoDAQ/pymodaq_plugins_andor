@@ -3,7 +3,7 @@ from enum import IntEnum
 import ctypes
 from ctypes.util import find_library
 import platform
-from PyQt5 import QtWidgets, QtCore
+from qtpy import QtWidgets, QtCore
 from easydict import EasyDict as edict
 from pymodaq.daq_viewer.utility_classes import DAQ_Viewer_base
 
@@ -74,7 +74,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         --------
         utility_classes.DAQ_Viewer_base
     """
-    callback_signal = QtCore.pyqtSignal()
+    callback_signal = QtCore.Signal()
     hardware_averaging = True #will use the accumulate acquisition mode if averaging is neccessary
     params = comon_parameters+[
         {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': str(libpath)},
@@ -565,7 +565,7 @@ class AndorCallback(QtCore.QObject):
     """
 
     """
-    data_sig = QtCore.pyqtSignal()
+    data_sig = QtCore.Signal()
 
     def __init__(self, wait_fn):
         super(AndorCallback, self).__init__()

@@ -1,5 +1,5 @@
 import numpy as np
-from PyQt5 import QtWidgets, QtCore
+from qtpy import QtWidgets, QtCore
 from easydict import EasyDict as edict
 from pymodaq.daq_viewer.utility_classes import DAQ_Viewer_base
 
@@ -43,8 +43,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         --------
         utility_classes.DAQ_Viewer_base
     """
-    start_waitloop = QtCore.pyqtSignal(int, int)
-    stop_waitloop = QtCore.pyqtSignal()
+    start_waitloop = QtCore.Signal(int, int)
+    stop_waitloop = QtCore.Signal()
 
     hardware_averaging = True  # will use the accumulate acquisition mode if averaging is neccessary
     live_mode_available = True
@@ -664,7 +664,7 @@ class AndorCallback(QtCore.QObject):
     """
 
     """
-    data_sig = QtCore.pyqtSignal(list)
+    data_sig = QtCore.Signal(list)
 
     def __init__(self, wait_fn):
         super().__init__()

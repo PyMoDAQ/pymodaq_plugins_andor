@@ -52,7 +52,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': libpath},
 
         {'title': 'Camera Settings:', 'name': 'camera_settings', 'type': 'group', 'children': [
-            {'title': 'Camera Models:', 'name': 'camera_model', 'type': 'list', 'values': camera_list},
+            {'title': 'Camera Models:', 'name': 'camera_model', 'type': 'list', 'limits': camera_list},
             {'title': 'Exposure (ms):', 'name': 'exposure', 'type': 'float', 'value': 0.01, 'default': 0.01, 'min': 0},
             {'title': 'Frame Rate (Hz):', 'name': 'frame_rate', 'type': 'float', 'value': 0., 'readonly': True},
             {'title': 'Number of buffer:', 'name': 'buffer_number', 'type': 'int', 'value': 10, 'min': 1},
@@ -62,9 +62,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 {'title': 'Nx:', 'name': 'Nx', 'type': 'int', 'value': 0, 'default': 0, 'readonly': True},
                 {'title': 'Ny:', 'name': 'Ny', 'type': 'int', 'value': 0, 'default': 0, 'readonly': True},
                 ]},
-            {'title': 'Encoding:', 'name': 'encoding', 'type': 'list', 'values': []},
+            {'title': 'Encoding:', 'name': 'encoding', 'type': 'list', 'limits': []},
             {'title': 'Image Area:', 'name': 'image_settings', 'type': 'group', 'children': [
-                {'title': 'Binning:', 'name': 'binning', 'type': 'list', 'values': []},
+                {'title': 'Binning:', 'name': 'binning', 'type': 'list', 'limits': []},
                 {'title': 'Binning along x:', 'name': 'bin_x', 'type': 'int', 'value': 1, 'default': 1, 'min': 1},
                 {'title': 'Binning along y:', 'name': 'bin_y', 'type': 'int', 'value': 1, 'default': 1, 'min': 1},
                 {'title': 'Left:', 'name': 'im_left', 'type': 'int', 'value': 1, 'default': 1, 'min': 1},
@@ -77,23 +77,23 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 ]},
 
             {'title': 'Trigger Settings:', 'name': 'trigger', 'type': 'group', 'children': [
-                {'title': 'Mode:', 'name': 'trigger_mode', 'type': 'list', 'values': []},
+                {'title': 'Mode:', 'name': 'trigger_mode', 'type': 'list', 'limits': []},
                 {'title': 'Software Trigger:', 'name': 'soft_trigger', 'type': 'bool_push', 'value': False,
                  'label': 'Fire'},
                 {'title': 'External Trigger delay (ms):', 'name': 'ext_trigger_delay', 'type': 'float', 'value': 0.},
             ]},
 
             {'title': 'Shutter Settings:', 'name': 'shutter', 'type': 'group', 'children': [
-                {'title': 'Mode:', 'name': 'shutter_mode', 'type': 'list', 'values': []},
-                {'title': 'External Trigger is:', 'name': 'shutter_on_ext_trigger', 'type': 'list', 'values': []},
+                {'title': 'Mode:', 'name': 'shutter_mode', 'type': 'list', 'limits': []},
+                {'title': 'External Trigger is:', 'name': 'shutter_on_ext_trigger', 'type': 'list', 'limits': []},
                 ]},
 
 
             {'title': 'Temperature Settings:', 'name': 'temperature_settings', 'type': 'group', 'children': [
                 {'title': 'Enable Cooling:', 'name': 'enable_cooling', 'type': 'bool', 'value': True},
-                {'title': 'Set Point:', 'name': 'set_point', 'type': 'list', 'values': []},
+                {'title': 'Set Point:', 'name': 'set_point', 'type': 'list', 'limits': []},
                 {'title': 'Current value:', 'name': 'current_value', 'type': 'float', 'value': 20, 'readonly': True},
-                {'title': 'Status:', 'name': 'status', 'type': 'list', 'values': [], 'readonly': True},
+                {'title': 'Status:', 'name': 'status', 'type': 'list', 'limits': [], 'readonly': True},
                 ]},
             ]},
         ]

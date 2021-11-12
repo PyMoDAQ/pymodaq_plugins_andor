@@ -81,9 +81,9 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         
         {'title': 'Camera Settings:', 'name': 'camera_settings', 'type': 'group', 'expanded': True, 'children': [
             {'title': 'Camera Models:', 'name': 'camera_model', 'type': 'list',
-                'values': [f"{cam['model']}-{cam['serial']}" for cam in camera_list]},
+                'limits': [f"{cam['model']}-{cam['serial']}" for cam in camera_list]},
 
-            {'title': 'Readout Modes:', 'name': 'readout', 'type': 'list', 'values': Andor_Camera_ReadOut.names()[0:-1],
+            {'title': 'Readout Modes:', 'name': 'readout', 'type': 'list', 'limits': Andor_Camera_ReadOut.names()[0:-1],
                                             'value': 'FullVertBinning'},
             {'title': 'Readout Settings:', 'name': 'readout_settings', 'type': 'group', 'children':[
 
@@ -115,8 +115,8 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                 ]},
             
             {'title': 'Shutter Settings:', 'name': 'shutter', 'type': 'group', 'children':[
-                {'title': 'Open Shutter on:', 'name': 'shutter_type', 'type': 'list', 'value': 'high', 'values': ['low', 'high']},
-                {'title': 'Shutter mode:', 'name': 'shutter_mode', 'type': 'list', 'value': 'Auto', 'values': ['Auto', 'Always Opened', 'Always Closed', ]},
+                {'title': 'Open Shutter on:', 'name': 'shutter_type', 'type': 'list', 'value': 'high', 'limits': ['low', 'high']},
+                {'title': 'Shutter mode:', 'name': 'shutter_mode', 'type': 'list', 'value': 'Auto', 'limits': ['Auto', 'Always Opened', 'Always Closed', ]},
                 {'title': 'Closing time (ms):', 'name': 'shutter_closing_time', 'type': 'int', 'value': 0, 'tip': 'millisecs it takes to close'},
                 {'title': 'Opening time (ms):', 'name': 'shutter_opening_time', 'type': 'int', 'value': 10, 'tip': 'millisecs it takes to open'},
                 ]},

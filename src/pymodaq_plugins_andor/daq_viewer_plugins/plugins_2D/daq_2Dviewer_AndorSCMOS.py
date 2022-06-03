@@ -19,7 +19,10 @@ if plat.startswith('Windows'):
     if libpath not in sys.path:
         sys.path.append(libpath)
 
-from ...hardware.andor_sdk3 import api, sdk3cam
+try:
+    from pymodaq_plugins_andor.hardware.andor_sdk3 import api, sdk3cam
+except OSError as e:
+    logger.exception(e)
 
 try:
     models, names, serial_numbers = api.getCameraInfos()

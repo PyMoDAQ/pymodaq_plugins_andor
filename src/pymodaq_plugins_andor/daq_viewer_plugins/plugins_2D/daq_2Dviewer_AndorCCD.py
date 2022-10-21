@@ -5,10 +5,10 @@ from ctypes.util import find_library
 import platform
 from qtpy import QtWidgets, QtCore
 from easydict import EasyDict as edict
-from pymodaq.daq_viewer.utility_classes import DAQ_Viewer_base
+from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base
 
 from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis, find_dict_in_list_from_key_val
-from pymodaq.daq_viewer.utility_classes import comon_parameters
+from pymodaq.control_modules.viewer_utility_classes import comon_parameters
 from pymodaq.daq_utils.parameter.utils import iter_children
 
 

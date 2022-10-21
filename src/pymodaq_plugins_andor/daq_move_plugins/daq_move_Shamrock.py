@@ -4,7 +4,7 @@ import ctypes
 from ctypes.util import find_library
 import platform
 from easydict import EasyDict as edict
-from pymodaq.daq_move.utility_classes import DAQ_Move_base, comon_parameters
+from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_parameters
 from pymodaq.daq_utils.daq_utils import ThreadCommand
 from ..hardware import shamrock_sdk
 from pathlib import Path

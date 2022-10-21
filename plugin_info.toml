@@ -2,7 +2,7 @@
 
 [plugin-info]
 SHORT_PLUGIN_NAME = 'andor'  #for instance daqmx
-package-url = 'https://github.com/CEMES-CNRS/pymodaq_plugins_andor' #to modify
+package-url = 'https://github.com/PyMoDAQ/pymodaq_plugins_andor' #to modify
 description = 'Set of PyMoDAQ plugins for Andor Camera (CCD camera using SDK2, SCMOS cameras using SDK3...)'
 
 author = 'Sébastien Weber'

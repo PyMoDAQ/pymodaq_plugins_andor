@@ -144,6 +144,8 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         self.callback_thread = None
         self.Naverage = None
         self.data_shape = None  # 'Data2D' if sizey != 1 else 'Data1D'
+        self.timer = QtCore.QTimer()
+        self.timer.timeout.connect(self.updated_timer)
 
     def commit_settings(self, param):
         """
@@ -406,7 +408,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         self.settings.child('camera_settings', 'temperature_settings', 'locked').setValue(
             locked_status == 'DRV_TEMP_STABILIZED')
         # set timer to update temperature info from controller
-        self.timer = self.startTimer(2000)  # Timer event fired every 2s
+        self.timer.start(2000)
 
         callback = AndorCallback(self.camera_controller.WaitForAcquisition)
         self.callback_thread = QtCore.QThread()
@@ -427,7 +429,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         self.camera_controller.SetShutter(typ, mode, self.settings.child('camera_settings', 'shutter', 'shutter_closing_time').value(),
                                           self.settings.child('camera_settings', 'shutter', 'shutter_opening_time').value())
 
-    def timerEvent(self, event):
+    def updated_timer(self):
         """
 
         """

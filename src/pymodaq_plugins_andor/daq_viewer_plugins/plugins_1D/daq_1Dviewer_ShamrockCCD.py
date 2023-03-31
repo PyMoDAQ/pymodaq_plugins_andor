@@ -1,9 +1,14 @@
-from ..plugins_2D.daq_2Dviewer_AndorCCD import DAQ_2DViewer_AndorCCD
-from ...daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
 import numpy as np
-from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, Axis, DataFromPlugins
-from pymodaq.daq_utils.parameter import utils as putils
 from qtpy import QtWidgets
+
+from pymodaq_plugins_andor.daq_viewer_plugins.plugins_2D.daq_2Dviewer_AndorCCD import DAQ_2DViewer_AndorCCD
+from pymodaq_plugins_andor.daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
+
+from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
+from pymodaq.utils.data import Axis, DataFromPlugins
+from pymodaq.utils.parameter import utils as putils
+
+from pymodaq.control_modules.viewer_utility_classes import main
 
 
 class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
@@ -31,8 +36,6 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
     params = [{'title': 'Get Calibration:', 'name': 'get_calib', 'type': 'bool_push', 'value': False,
               'label': 'Update!'}] + param_camera + params_shamrock
 
-
-
     def __init__(self, parent=None, params_state=None):
 
         DAQ_2DViewer_AndorCCD.__init__(self, parent, params_state)
@@ -42,7 +45,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         self.shamrock_controller = None  # this will be the controller attribute of the  DAQ_Move_Shamrock instance
         # both plugins don't have the generic controller name 'controller' but specific one for this reason
 
-        self.x_axis = None
+        self.x_axis: Axis = None
         self.is_calibrated = False
 
     def commit_settings(self, param):
@@ -70,25 +73,19 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
                 param.setValue(False)
 
     def ini_detector(self, controller=None):
-        try:
-            status_shamrock = DAQ_Move_Shamrock.ini_stage(self, controller)
-            QtWidgets.QApplication.processEvents()
-            # if status_shamrock.initialized:
-            #     self.move_Home()
+        _, shamrock_initialized = DAQ_Move_Shamrock.ini_stage(self, controller)
+        QtWidgets.QApplication.processEvents()
+        # if status_shamrock.initialized:
+        #     self.move_Home()
 
-            status_camera = DAQ_2DViewer_AndorCCD.ini_detector(self, controller)
-            QtWidgets.QApplication.processEvents()
+        _, camera_initialized = DAQ_2DViewer_AndorCCD.ini_detector(self, controller)
+        QtWidgets.QApplication.processEvents()
 
-            self.status.initialized = status_shamrock.initialized and status_camera.initialized
+        initialized = shamrock_initialized and camera_initialized
 
-            self.setCalibration()
-            return self.status
-
-        except Exception as e:
-            self.status.info = str(e)
-            self.status.initialized = False
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
+        self.setCalibration()
+        self.emit_status(ThreadCommand('close_splash'))
+        return '', initialized
 
     def setCalibration(self):
         #setNpixels
@@ -137,9 +134,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
                 self.emit_status(ThreadCommand('Update_Status', ['Impossible to flip wavelength', "log"]))
 
             self.x_axis = Axis(data=calib, label='Wavelength (nm)')
-            self.emit_x_axis()
         return self.x_axis
-
 
     def get_exposure_ms(self):
         #for compatibility with PyMoDAQ Spectro module
@@ -173,7 +168,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
             self.camera_controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
             self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
                                                           data=[np.squeeze(
-                                                              self.data.reshape((sizey, sizex)).astype(np.float))],
+                                                              self.data.reshape((sizey, sizex)).astype(float))],
                                                           dim=self.data_shape,
                                                           x_axis=self.x_axis),])
             QtWidgets.QApplication.processEvents()  # here to be sure the timeevents are executed even if in continuous grab mode
@@ -181,3 +176,6 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
 
+
+if __name__ == '__main__':
+    main(__file__, True)

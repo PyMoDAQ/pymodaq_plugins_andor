@@ -1,13 +1,9 @@
-import sys
-import numpy as np
-import ctypes
-from ctypes.util import find_library
-import platform
+
 from easydict import EasyDict as edict
-from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_parameters
-from pymodaq.daq_utils.daq_utils import ThreadCommand
-from ..hardware import shamrock_sdk
-from pathlib import Path
+from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_parameters_fun, main
+from pymodaq.utils.daq_utils import ThreadCommand
+from pymodaq_plugins_andor.hardware import shamrock_sdk
+
 
 libpath = shamrock_sdk.dllpath
 
@@ -16,7 +12,8 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
     _controller_units = 'nm'
     is_multiaxes = False
-    stage_names = []  # "list of strings of the multiaxes
+    axes_names = []  # "list of strings of the multiaxes
+    _epsilon = 0.1
 
     params = [
         {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': str(libpath), 'readonly': True},
@@ -38,15 +35,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
                     'visible': False},
                 {'title': 'Go to zero order:', 'name': 'zero_order', 'type': 'bool'},
             ]},
-        {'title': 'MultiAxes:', 'name': 'multiaxes', 'type': 'group', 'visible': is_multiaxes, 'children': [
-            {'title': 'is Multiaxes:', 'name': 'ismultiaxes', 'type': 'bool', 'value': is_multiaxes,
-                'default': False},
-            {'title': 'Status:', 'name': 'multi_status', 'type': 'list', 'value': 'Master',
-                'limits': ['Master', 'Slave']},
-            {'title': 'Axis:', 'name': 'axis', 'type': 'list', 'limits': stage_names},
-
-        ]}] + \
-        comon_parameters
+        ] + comon_parameters_fun(is_multiaxes, axes_names, epsilon=_epsilon)
 
     def __init__(self, parent=None, params_state=None):
         super().__init__(parent, params_state)  # initialize base class with common attributes and methods
@@ -103,31 +92,15 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
             * controller (object) initialized controller
             *initialized: (bool): False if initialization failed otherwise True
         """
-        self.status.update(edict(initialized=False, info="", controller=None))
-        try:
-            self.emit_status(ThreadCommand('show_splash', ["Initialising Shamrock"]))
-            if self.settings.child('multiaxes', 'ismultiaxes').value() and self.settings.child('multiaxes',
-                                                                                'multi_status').value() == "Slave":
-                if controller is None:
-                    raise Exception('no controller has been defined externally while this detector is a slave one')
-                else:
-                    self.shamrock_controller = controller
-            else:
-                self.shamrock_controller = shamrock_sdk.ShamrockSDK()
+        self.shamrock_controller = self.ini_stage_init(old_controller=controller,
+                                                       new_controller=shamrock_sdk.ShamrockSDK())
 
-            self.emit_status(ThreadCommand('show_splash', ["Set/Get Shamrock's settings"]))
-            self.ini_spectro()
+        self.emit_status(ThreadCommand('show_splash', ["Set/Get Shamrock's settings"]))
+        self.ini_spectro()
 
-            self.status.initialized = True
-            self.status.controller = self.shamrock_controller
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
-
-        except Exception as e:
-            self.status.info = str(e)
-            self.status.initialized = False
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
+        initialized = True
+        self.emit_status(ThreadCommand('close_splash'))
+        return '', initialized
 
     def check_position(self):
         """Get the current position from the hardware with scaling conversion.
@@ -261,5 +234,11 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
                                                            tip=f'Possible values are within {wl_min} and {wl_max} for'
                                                                f' the selected grating')
 
-
         self.emit_status(ThreadCommand('close_splash'))
+
+    def stop(self):
+        pass
+
+
+if __name__ == '__main__':
+    main(__file__, True)

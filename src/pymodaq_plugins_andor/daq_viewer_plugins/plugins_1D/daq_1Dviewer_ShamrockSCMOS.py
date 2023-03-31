@@ -1,8 +1,10 @@
 from ..plugins_2D.daq_2Dviewer_AndorSCMOS import DAQ_2DViewer_AndorSCMOS
 from ...daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
+
 import numpy as np
-from pymodaq.daq_utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, Axis
-from pymodaq.daq_utils.parameter import utils as putils
+from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
+from pymodaq.utils.data import Axis, DataFromPlugins
+from pymodaq.utils.parameter import utils as putils
 from qtpy import QtWidgets
 
 
@@ -30,7 +32,6 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamrock):
 
     params = [{'title': 'Get Calibration:', 'name': 'get_calib', 'type': 'bool_push', 'value': False,
               'label': 'Update!'}] + param_camera + params_shamrock
-
 
 
     def __init__(self, parent=None, params_state=None):
@@ -70,25 +71,18 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamrock):
                 param.setValue(False)
 
     def ini_detector(self, controller=None):
-        try:
-            status_shamrock = DAQ_Move_Shamrock.ini_stage(self, controller)
-            QtWidgets.QApplication.processEvents()
-            # if status_shamrock.initialized:
-            #     self.move_Home()
+        _, shamrock_initialized = DAQ_Move_Shamrock.ini_stage(self, controller)
+        QtWidgets.QApplication.processEvents()
+        # if status_shamrock.initialized:
+        #     self.move_Home()
 
-            status_camera = DAQ_2DViewer_AndorSCMOS.ini_detector(self, controller)
-            QtWidgets.QApplication.processEvents()
+        _, camera_initialized = DAQ_2DViewer_AndorSCMOS.ini_detector(self, controller)
+        QtWidgets.QApplication.processEvents()
 
-            self.status.initialized = status_shamrock.initialized and status_camera.initialized
+        initialized = shamrock_initialized and camera_initialized
 
-            self.setCalibration()
-            return self.status
-
-        except Exception as e:
-            self.status.info = str(e)
-            self.status.initialized = False
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
+        self.setCalibration()
+        return '', initialized
 
     def setCalibration(self):
         #setNpixels

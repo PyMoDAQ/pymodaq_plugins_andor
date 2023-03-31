@@ -390,7 +390,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.y_axis = self.get_yaxis()
 
         self.data_grabed_signal_temp.emit([DataFromPlugins(name='Andor SCMOS',
-                                                           data=[np.zeros((len(self.y_axis, len(self.x_axis))))],
+                                                           data=[np.zeros((len(self.y_axis), len(self.x_axis)))],
                                                            dim='Data2D', labels=['dat0'],
                                                            x_axis=self.x_axis,
                                                            y_axis=self.y_axis), ])

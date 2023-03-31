@@ -205,7 +205,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             self.camera_controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
             self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
                                                           data=[np.squeeze(
-                                                              self.data.reshape((sizey, sizex)).astype(np.float))],
+                                                              self.data.reshape((sizey, sizex)).astype(float))],
                                                           dim=self.data_shape)])
             QtWidgets.QApplication.processEvents()  # here to be sure the timeevents are executed even if in continuous grab mode
 
@@ -330,7 +330,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         self.x_axis = self.get_xaxis()
         self.y_axis = self.get_yaxis()
         self.data_grabed_signal_temp.emit([DataFromPlugins(name='Andor SCMOS',
-                                                           data=[np.zeros((len(self.y_axis, len(self.x_axis))))],
+                                                           data=[np.zeros((len(self.y_axis), len(self.x_axis)))],
                                                            dim='Data2D', labels=['dat0'],
                                                            x_axis=self.x_axis,
                                                            y_axis=self.y_axis), ])
@@ -460,7 +460,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         if self.camera_controller is not None:
             # if self.control_type == "camera":
             Nx = self.settings.child('camera_settings', 'image_size', 'Nx').value()
-            self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=np.int), label='Pixels')
+            self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=int), label='Pixels')
 
             self.emit_x_axis()
         else:
@@ -479,8 +479,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         if self.camera_controller is not None:
 
             Ny = self.settings.child('camera_settings', 'image_size', 'Ny').value()
-            self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=np.int), label='Pixels')
-            self.emit_y_axis()
+            self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=int), label='Pixels')
         else:
             raise (Exception('Camera not defined'))
         return self.y_axis
@@ -491,7 +490,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
         # %%%%%% Initialize data: self.data for the memory to store new data and self.data_average to store the average data
         image_size = sizex * sizey
-        self.data = np.zeros((image_size,), dtype=np.long)
+        self.data = np.zeros((image_size,), dtype=int)
         self.data_pointer = self.data.ctypes.data_as(ctypes.c_void_p)
 
         data_shape = 'Data2D' if sizey != 1 else 'Data1D'
@@ -500,7 +499,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             # init the viewers
             self.data_grabed_signal_temp.emit([DataFromPlugins(name='Camera ',
                                                                data=[np.squeeze(
-                                                                   self.data.reshape((sizey, sizex)).astype(np.float))],
+                                                                   self.data.reshape((sizey, sizex)).astype(float))],
                                                                dim=self.data_shape)])
 
     def grab_data(self, Naverage=1, **kwargs):
@@ -573,5 +572,5 @@ class AndorCallback(QtCore.QObject):
             self.data_sig.emit()
 
 
-if __name__ == '__main':
-    main(init=False)
+if __name__ == '__main__':
+    main(__file__, init=False)

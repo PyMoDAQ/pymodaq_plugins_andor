@@ -5,13 +5,13 @@ from ctypes.util import find_library
 import platform
 from qtpy import QtWidgets, QtCore
 from easydict import EasyDict as edict
-from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters
+from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
+from pymodaq.utils.data import DataFromPlugins, Axis
+from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
+from pymodaq.utils.parameter.utils import iter_children
 
-from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis, find_dict_in_list_from_key_val
-from pymodaq.daq_utils.parameter.utils import iter_children
 
-
-from ...hardware.andor_sdk2 import sdk2
+from pymodaq_plugins_andor.hardware.andor_sdk2 import sdk2
 libpath = sdk2.dllpath
 camera_list = sdk2.AndorSDK.GetCamerasInfo()
 
@@ -129,9 +129,9 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         ]},
         ]
 
-    def __init__(self, parent=None, params_state=None):
+    def ini_attributes(self):
 
-        super().__init__(parent, params_state)  # initialize base class with commom attributes and methods
+        self.camera_controller: sdk2.AndorSDK() = None
 
         self.x_axis = None
         self.y_axis = None
@@ -319,35 +319,29 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             --------
             daq_utils.ThreadCommand, hardware1D.DAQ_1DViewer_Picoscope.update_pico_settings
         """
-        self.status.update(edict(initialized=False, info="", x_axis=None, y_axis=None, controller=None))
-        try:
-            self.emit_status(ThreadCommand('show_splash', ["Initialising Andor CCD Camera "]))
-            if self.settings.child(('controller_status')).value() == "Slave":
-                if controller is None:
-                    raise Exception('no controller has been defined externally while this detector is a slave one')
-                else:
-                    self.camera_controller = controller
-            else:
-                self.camera_controller = sdk2.AndorSDK()
 
-            self.emit_status(ThreadCommand('show_splash', ["Set/Get Camera's settings"]))
-            self.ini_camera()
+        self.camera_controller = self.ini_detector_init(old_controller=controller,
+                                                        new_controller=sdk2.AndorSDK())
 
-            # %%%%%%% init axes from image
-            self.x_axis = self.get_xaxis()
-            self.y_axis = self.get_yaxis()
-            self.status.x_axis = self.x_axis
-            self.status.y_axis = self.y_axis
-            self.status.initialized = True
-            self.status.controller = self.camera_controller
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
+        self.emit_status(ThreadCommand('show_splash', ["Set/Get Camera's settings"]))
+        self.ini_camera()
 
-        except Exception as e:
-            self.status.info = str(e)
-            self.status.initialized = False
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
+        # %%%%%%% init axes from image
+        self.x_axis = self.get_xaxis()
+        self.y_axis = self.get_yaxis()
+        self.data_grabed_signal_temp.emit([DataFromPlugins(name='Andor SCMOS',
+                                                           data=[np.zeros((len(self.y_axis, len(self.x_axis))))],
+                                                           dim='Data2D', labels=['dat0'],
+                                                           x_axis=self.x_axis,
+                                                           y_axis=self.y_axis), ])
+
+        self.emit_status(ThreadCommand('close_splash'))
+
+        info = ""
+        initialized = True
+        return info, initialized
+
+
 
     def get_ROI_size_x(self):
         self.CCDSIZEX, self.CCDSIZEY = self.camera_controller.GetDetector()
@@ -577,3 +571,7 @@ class AndorCallback(QtCore.QObject):
 
         if err != 'DRV_NO_NEW_DATA':  # will be returned if the main thread called CancelWait
             self.data_sig.emit()
+
+
+if __name__ == '__main':
+    main(init=False)

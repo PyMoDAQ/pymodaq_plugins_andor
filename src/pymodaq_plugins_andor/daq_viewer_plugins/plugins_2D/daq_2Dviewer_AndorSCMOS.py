@@ -1,14 +1,17 @@
-import numpy as np
-from qtpy import QtWidgets, QtCore
-from easydict import EasyDict as edict
-from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base
-
-from pymodaq.daq_utils.daq_utils import ThreadCommand, DataFromPlugins, Axis, set_logger, get_module_name, zeros_aligned
-from pymodaq.control_modules.viewer_utility_classes import comon_parameters
-
-from pymodaq.daq_utils.parameter.utils import iter_children
 import platform
 import sys
+
+from easydict import EasyDict as edict
+import numpy as np
+from qtpy import QtWidgets, QtCore
+
+from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base
+from pymodaq.utils.logger import set_logger, get_module_name
+from pymodaq.control_modules.viewer_utility_classes import comon_parameters
+from pymodaq.utils.data import DataFromPlugins, Axis
+from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, zeros_aligned
+from pymodaq.utils.parameter.utils import iter_children
+
 arch, plat = platform.architecture()
 from time import perf_counter
 logger = set_logger(get_module_name(__file__))
@@ -101,9 +104,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             ]},
         ]
 
-    def __init__(self, parent=None, params_state=None):
+    def ini_attributes(self):
 
-        super().__init__(parent, params_state)  # initialize base class with commom attributes and methods
+        self.camera_controller: api.AndorCamera = None
 
         self.buffers = []
         self.buffers_pointer = []
@@ -232,7 +235,6 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
                 self.settings.child('camera_settings', 'trigger', 'ext_trigger_delay').value() / 1000)
             self.settings.child('camera_settings', 'trigger',
                                 'ext_trigger_delay').setValue(self.camera_controller.ExternalTriggerDelay.getValue() * 1000)
-
 
     def emit_data(self, buffer_pointer):
         """
@@ -376,35 +378,28 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             --------
             daq_utils.ThreadCommand, hardware1D.DAQ_1DViewer_Picoscope.update_pico_settings
         """
-        self.status.update(edict(initialized=False, info="", x_axis=None, y_axis=None, controller=None))
-        try:
-            self.emit_status(ThreadCommand('show_splash', ["Initialising Camera"]))
-            if self.settings.child(('controller_status')).value() == "Slave":
-                if controller is None:
-                    raise Exception('no controller has been defined externally while this detector is a slave one')
-                else:
-                    self.camera_controller = controller
-            else:
-                model = self.settings.child('camera_settings', 'camera_model')
-                self.camera_controller = api.AndorCamera(model.opts['limits'].index(model.value()))
+        model = self.settings.child('camera_settings', 'camera_model')
+        self.camera_controller = self.ini_detector_init(old_controller=controller,
+                                                        new_controller=api.AndorCamera(
+                                                            model.opts['limits'].index(model.value())))
 
-            self.ini_camera()
+        self.ini_camera()
 
-            # %%%%%%% init axes from image
-            self.x_axis = self.get_xaxis()
-            self.y_axis = self.get_yaxis()
-            self.status.x_axis = self.x_axis
-            self.status.y_axis = self.y_axis
-            self.status.initialized = True
-            self.status.controller = self.camera_controller
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
+        # %%%%%%% init axes from image
+        self.x_axis = self.get_xaxis()
+        self.y_axis = self.get_yaxis()
 
-        except Exception as e:
-            self.status.info = str(e)
-            self.status.initialized = False
-            self.emit_status(ThreadCommand('close_splash'))
-            return self.status
+        self.data_grabed_signal_temp.emit([DataFromPlugins(name='Andor SCMOS',
+                                                           data=[np.zeros((len(self.y_axis, len(self.x_axis))))],
+                                                           dim='Data2D', labels=['dat0'],
+                                                           x_axis=self.x_axis,
+                                                           y_axis=self.y_axis), ])
+
+        self.emit_status(ThreadCommand('close_splash'))
+
+        info = ""
+        initialized = True
+        return info, initialized
 
     def setup_temperature(self):
         enable = self.settings.child('camera_settings', 'temperature_settings', 'enable_cooling').value()

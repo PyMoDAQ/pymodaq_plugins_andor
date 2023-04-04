@@ -84,7 +84,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         initialized = shamrock_initialized and camera_initialized
 
         self.setCalibration()
-        self.emit_status(ThreadCommand('close_splash'))
+        #self.emit_status(ThreadCommand('close_splash'))
         return '', initialized
 
     def setCalibration(self):
@@ -131,7 +131,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
 
             else:
                 self.settings.child('spectro_settings', 'flip_wavelength').setValue(False)
-                self.emit_status(ThreadCommand('Update_Status', ['Impossible to flip wavelength', "log"]))
+                #self.emit_status(ThreadCommand('Update_Status', ['Impossible to flip wavelength', "log"]))
 
             self.x_axis = Axis(data=calib, label='Wavelength (nm)')
         return self.x_axis

@@ -25,13 +25,13 @@ class Andor_Camera_ReadOut(IntEnum):
         *names*          string list of members
         =============== =======================
     """
-    
-    FullVertBinning=0
-    SingleTrack=3
-    MultiTrack=1
-    RandomTrack=2
-    Image=4
-    Cropped=5
+
+    FullVertBinning = 0
+    SingleTrack = 3
+    MultiTrack = 1
+    RandomTrack = 2
+    Image = 4
+    Cropped = 5
 
 
     @classmethod
@@ -329,19 +329,12 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         # %%%%%%% init axes from image
         self.x_axis = self.get_xaxis()
         self.y_axis = self.get_yaxis()
-        self.data_grabed_signal_temp.emit([DataFromPlugins(name='Andor SCMOS',
-                                                           data=[np.zeros((len(self.y_axis), len(self.x_axis)))],
-                                                           dim='Data2D', labels=['dat0'],
-                                                           x_axis=self.x_axis,
-                                                           y_axis=self.y_axis), ])
 
         self.emit_status(ThreadCommand('close_splash'))
 
         info = ""
         initialized = True
         return info, initialized
-
-
 
     def get_ROI_size_x(self):
         self.CCDSIZEX, self.CCDSIZEY = self.camera_controller.GetDetector()

@@ -6,10 +6,10 @@ import platform
 from qtpy import QtWidgets, QtCore
 from easydict import EasyDict as edict
 from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
+
 from pymodaq.utils.data import DataFromPlugins, Axis
 from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
 from pymodaq.utils.parameter.utils import iter_children
-
 
 from pymodaq_plugins_andor.hardware.andor_sdk2 import sdk2
 libpath = sdk2.dllpath
@@ -566,4 +566,5 @@ class AndorCallback(QtCore.QObject):
 
 
 if __name__ == '__main__':
-    main(__file__, init=False)
+    main(__file__, init=True)
+

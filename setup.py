@@ -25,6 +25,7 @@ setupOpts = dict(
     author_email=config['plugin-info']['author-email'],
     classifiers=[
         "Programming Language :: Python :: 3",
+        "Author :: Sébastien. J. Weber",
         "Development Status :: 5 - Production/Stable",
         "Environment :: Other Environment",
         "Intended Audience :: Science/Research",

@@ -183,10 +183,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             elif param.name() in iter_children(self.settings.child('camera_settings', 'readout_settings', 'image_settings')):
                 if self.settings.child('camera_settings', 'readout').value() == 'Image':
                     self.set_image_area()
-
             pass
-
-
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), 'log']))
 
@@ -453,9 +450,8 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         if self.camera_controller is not None:
             # if self.control_type == "camera":
             Nx = self.settings.child('camera_settings', 'image_size', 'Nx').value()
-            self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=int), label='Pixels')
+            self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=int), label='Pixels', index=1)
 
-            self.emit_x_axis()
         else:
             raise(Exception('controller not defined'))
         return self.x_axis
@@ -472,7 +468,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         if self.camera_controller is not None:
 
             Ny = self.settings.child('camera_settings', 'image_size', 'Ny').value()
-            self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=int), label='Pixels')
+            self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=int), label='Pixels', index=0)
         else:
             raise (Exception('Camera not defined'))
         return self.y_axis

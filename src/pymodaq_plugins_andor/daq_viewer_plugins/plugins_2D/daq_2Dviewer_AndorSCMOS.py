@@ -323,6 +323,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.x_axis = self.get_xaxis()
         self.y_axis = self.get_yaxis()
 
+    def ROISelect(self, rect: QtCore.QRectF):
+        pass
+
     def setup_image(self):
         binnings = self.camera_controller.AOIBinning.getAvailableValues()
         self.settings.child('camera_settings', 'image_settings', 'binning').setLimits(binnings)

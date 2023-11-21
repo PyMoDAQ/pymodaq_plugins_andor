@@ -324,7 +324,14 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.y_axis = self.get_yaxis()
 
     def ROISelect(self, rect: QtCore.QRectF):
-        pass
+
+        self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(min(rect.width(), self.SIZEX))
+        self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(min(rect.height(), self.SIZEY))
+        self.settings.child('camera_settings', 'image_settings', 'im_left').setValue(
+            min(max(1, rect.x()), self.SIZEX - self.settings['camera_settings', 'image_settings', 'im_width'] -1))
+        self.settings.child('camera_settings', 'image_settings', 'im_top').setValue(
+            min(max(1, rect.y()), self.SIZEY - self.settings['camera_settings', 'image_settings', 'im_height'] - 1))
+        self.set_image_area()
 
     def setup_image(self):
         binnings = self.camera_controller.AOIBinning.getAvailableValues()
@@ -350,7 +357,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         return self.camera_controller.PixelWidth.getValue() * self.camera_controller.AOIHBin.getValue()
 
     def set_image_area(self):
-
+        if self.camera_controller.CameraAcquiring.getValue():
+            self.camera_controller.AcquisitionStop()  # mandatory in order to modify  the area to grab from
         left = self.settings.child('camera_settings', 'image_settings', 'im_left').value()
         top = self.settings.child('camera_settings', 'image_settings', 'im_top').value()
         width = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
@@ -359,6 +367,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         # first set width and height as it modifies the possible top and left
         self.camera_controller.AOIWidth.setValue(width)
         self.camera_controller.AOIHeight.setValue(height)
+        self.setup_image()
+        QtWidgets.QApplication.processEvents()
         self.camera_controller.AOITop.setValue(top)
         self.camera_controller.AOILeft.setValue(left)
 
@@ -512,6 +522,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.temperature_timer.stop()
         QtWidgets.QApplication.processEvents()
         if self.camera_controller is not None:
+            self.camera_controller.stop()
             self.camera_controller.close()
 
     def get_xaxis(self):
@@ -647,11 +658,12 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             stop the camera's actions.
         """
         try:
-            self.stop_waitloop.emit()
-            if self.camera_controller.CameraAcquiring.getValue():
-                self.camera_controller.AcquisitionStop()
-            QtWidgets.QApplication.processEvents()
-            self.temperature_timer.start(2000)
+            if self.controller is not None:
+                self.stop_waitloop.emit()
+                if self.camera_controller.CameraAcquiring.getValue():
+                    self.camera_controller.AcquisitionStop()
+                QtWidgets.QApplication.processEvents()
+                self.temperature_timer.start(2000)
 
         except:
             pass

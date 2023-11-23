@@ -7,8 +7,10 @@ from pymodaq_plugins_andor.daq_move_plugins.daq_move_Shamrock import DAQ_Move_Sh
 from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
 from pymodaq.utils.data import Axis, DataFromPlugins
 from pymodaq.utils.parameter import utils as putils
-
 from pymodaq.control_modules.viewer_utility_classes import main
+from pymodaq.utils.logger import set_logger, get_module_name
+
+logger = set_logger(get_module_name(__file__))
 
 
 class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
@@ -21,7 +23,6 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         --------
         utility_classes.DAQ_Viewer_base
     """
-
     param_camera = DAQ_2DViewer_AndorCCD.params
     params_shamrock = DAQ_Move_Shamrock.params
     putils.get_param_dict_from_name(params_shamrock, 'andor_lib', pop=True)
@@ -37,9 +38,8 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
               'label': 'Update!'}] + param_camera + params_shamrock
 
     def __init__(self, parent=None, params_state=None):
-
-        DAQ_2DViewer_AndorCCD.__init__(self, parent, params_state)
         DAQ_Move_Shamrock.__init__(self, parent, params_state)
+        DAQ_2DViewer_AndorCCD.__init__(self, parent, params_state)
 
         self.camera_controller = None  # this will be the controller attribute of the  DAQ_2DViewer_AndorCCD instance
         self.shamrock_controller = None  # this will be the controller attribute of the  DAQ_Move_Shamrock instance
@@ -149,8 +149,10 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         DAQ_2DViewer_AndorCCD.stop(self)
 
     def close(self):
-        DAQ_2DViewer_AndorCCD.stop(self)
-        DAQ_Move_Shamrock.stop(self)
+        if self.camera_controller is not None:
+            DAQ_2DViewer_AndorCCD.stop(self)
+        if self.shamrock_controller is not None:
+            DAQ_Move_Shamrock.stop(self)
 
     def grab_data(self, Naverage=1, **kwargs):
         if not self.is_calibrated:
@@ -170,7 +172,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
                                                           data=[np.squeeze(
                                                               self.data.reshape((sizey, sizex)).astype(float))],
                                                           dim=self.data_shape,
-                                                          x_axis=self.x_axis),])
+                                                          axes=[self.x_axis]),])
             QtWidgets.QApplication.processEvents()  # here to be sure the timeevents are executed even if in continuous grab mode
 
         except Exception as e:

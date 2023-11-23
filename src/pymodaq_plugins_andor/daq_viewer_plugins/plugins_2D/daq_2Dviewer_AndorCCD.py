@@ -7,11 +7,13 @@ from qtpy import QtWidgets, QtCore
 from easydict import EasyDict as edict
 from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
 
-from pymodaq.utils.data import DataFromPlugins, Axis
+from pymodaq.utils.data import DataFromPlugins, Axis, DataToExport
 from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
 from pymodaq.utils.parameter.utils import iter_children
 
 from pymodaq_plugins_andor.hardware.andor_sdk2 import sdk2
+
+
 libpath = sdk2.dllpath
 camera_list = sdk2.AndorSDK.GetCamerasInfo()
 
@@ -171,11 +173,11 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                 self.update_read_mode()
                 
             elif param.name() == 'exposure':
-                self.camera_controller.SetExposureTime(self.settings.child('camera_settings', 'exposure').value() / 1000) #temp should be in s
+                self.camera_controller.SetExposureTime(param.value() / 1000) #temp should be in s
                 (err, timings) = self.camera_controller.GetAcquisitionTimings()
                 self.settings.child('camera_settings', 'exposure').setValue(timings['exposure']*1000)
                 QtWidgets.QApplication.processEvents()
-                self.get_exposure_ms()
+                #self.get_exposure_ms()
 
             elif param.name() in iter_children(self.settings.child('camera_settings', 'shutter'), []):
                 self.set_shutter()
@@ -200,10 +202,11 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             sizey = self.settings.child('camera_settings', 'image_size', 'Ny').value()
             sizex = self.settings.child('camera_settings', 'image_size', 'Nx').value()
             self.camera_controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
-            self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
-                                                          data=[np.squeeze(
-                                                              self.data.reshape((sizey, sizex)).astype(float))],
-                                                          dim=self.data_shape)])
+            self.dte_signal.emit(DataToExport('Camera',
+                                              data=[DataFromPlugins(name='Camera',
+                                                                    data=[np.squeeze(
+                                                                        self.data.reshape((sizey, sizex)).astype(float))],
+                                                                    dim=self.data_shape)]))
             QtWidgets.QApplication.processEvents()  # here to be sure the timeevents are executed even if in continuous grab mode
 
         except Exception as e:
@@ -320,7 +323,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         self.camera_controller = self.ini_detector_init(old_controller=controller,
                                                         new_controller=sdk2.AndorSDK())
 
-        self.emit_status(ThreadCommand('show_splash', ["Set/Get Camera's settings"]))
+        self.emit_status(ThreadCommand('show_splash', "Set/Get Camera's settings"))
         self.ini_camera()
 
         # %%%%%%% init axes from image
@@ -426,17 +429,17 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         """
 
         """
-
-        err, temp = self.camera_controller.GetTemperature()
-        print(temp)
-        if temp < -20.:
-            print(
-                "Camera temperature is still at {:d}°C. Closing it now may damage it! The cooling will be maintained "
-                "while shutting down camera. Keep it power plugged!!!".format(
-                    temp))
-            self.camera_controller.SetCoolerMode(1)
-        self.timer.stop()
-        self.camera_controller.close()
+        if self.camera_controller is not None:
+            err, temp = self.camera_controller.GetTemperature()
+            print(temp)
+            if temp < -20.:
+                print(
+                    "Camera temperature is still at {:d}°C. Closing it now may damage it! The cooling will be maintained "
+                    "while shutting down camera. Keep it power plugged!!!".format(
+                        temp))
+                self.camera_controller.SetCoolerMode(1)
+            self.timer.stop()
+            self.camera_controller.close()
 
     def get_xaxis(self):
         """
@@ -486,10 +489,11 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         if data_shape != self.data_shape:
             self.data_shape = data_shape
             # init the viewers
-            self.data_grabed_signal_temp.emit([DataFromPlugins(name='Camera ',
+            self.dte_signal_temp.emit(DataToExport('Camera',
+                                                   data=[DataFromPlugins(name='Camera ',
                                                                data=[np.squeeze(
                                                                    self.data.reshape((sizey, sizex)).astype(float))],
-                                                               dim=self.data_shape)])
+                                                               dim=self.data_shape)]))
 
     def grab_data(self, Naverage=1, **kwargs):
         """

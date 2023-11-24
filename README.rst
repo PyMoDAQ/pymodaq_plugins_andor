@@ -32,8 +32,10 @@ Actuators
 Viewer1D
 ++++++++
 
-* **ShamrockCCD**: Shamrock series of spectrometer using the Andor CCD cameras
-* **ShamrockSCMOS**: Shamrock series of spectrometer using the Andor SCMOS cameras
+* **ShamrockCCD**: Shamrock series of spectrometer using the Andor CCD cameras (built using double inheritance)
+* **ShamrockSCMOS**: Shamrock series of spectrometer using the Andor SCMOS cameras (Not tested) (built using double inheritance)
+* **ShamrockCCDComposition**: Shamrock series of spectrometer using the Andor CCD cameras (built using CCD camera inheritance and Shamrock composition)
+* **ShamrockSCMOSComposition**: Shamrock series of spectrometer using the Andor SCMOS cameras (Not tested) (built using SCMOS camera inheritance and Shamrock composition)
 
 Viewer2D
 ++++++++

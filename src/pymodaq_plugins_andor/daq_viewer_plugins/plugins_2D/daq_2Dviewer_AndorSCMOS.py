@@ -1,13 +1,13 @@
 import platform
 import sys
+import os
 
 from easydict import EasyDict as edict
 import numpy as np
 from qtpy import QtWidgets, QtCore
 
-from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base
+from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
 from pymodaq.utils.logger import set_logger, get_module_name
-from pymodaq.control_modules.viewer_utility_classes import comon_parameters
 from pymodaq.utils.data import DataFromPlugins, Axis
 from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, zeros_aligned
 from pymodaq.utils.parameter.utils import iter_children
@@ -21,6 +21,7 @@ if plat.startswith('Windows'):
     libpath = 'C:\\Program Files\\Andor SDK3\\win32'
     if libpath not in sys.path:
         sys.path.append(libpath)
+    os.add_dll_directory(libpath)
 
 try:
     from pymodaq_plugins_andor.hardware.andor_sdk3 import api, sdk3cam
@@ -322,6 +323,16 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.x_axis = self.get_xaxis()
         self.y_axis = self.get_yaxis()
 
+    def ROISelect(self, rect: QtCore.QRectF):
+
+        self.settings.child('camera_settings', 'image_settings', 'im_width').setValue(min(rect.width(), self.SIZEX))
+        self.settings.child('camera_settings', 'image_settings', 'im_height').setValue(min(rect.height(), self.SIZEY))
+        self.settings.child('camera_settings', 'image_settings', 'im_left').setValue(
+            min(max(1, rect.x()), self.SIZEX - self.settings['camera_settings', 'image_settings', 'im_width'] -1))
+        self.settings.child('camera_settings', 'image_settings', 'im_top').setValue(
+            min(max(1, rect.y()), self.SIZEY - self.settings['camera_settings', 'image_settings', 'im_height'] - 1))
+        self.set_image_area()
+
     def setup_image(self):
         binnings = self.camera_controller.AOIBinning.getAvailableValues()
         self.settings.child('camera_settings', 'image_settings', 'binning').setLimits(binnings)
@@ -346,7 +357,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         return self.camera_controller.PixelWidth.getValue() * self.camera_controller.AOIHBin.getValue()
 
     def set_image_area(self):
-
+        if self.camera_controller.CameraAcquiring.getValue():
+            self.camera_controller.AcquisitionStop()  # mandatory in order to modify  the area to grab from
         left = self.settings.child('camera_settings', 'image_settings', 'im_left').value()
         top = self.settings.child('camera_settings', 'image_settings', 'im_top').value()
         width = self.settings.child('camera_settings', 'image_settings', 'im_width').value()
@@ -355,6 +367,8 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         # first set width and height as it modifies the possible top and left
         self.camera_controller.AOIWidth.setValue(width)
         self.camera_controller.AOIHeight.setValue(height)
+        self.setup_image()
+        QtWidgets.QApplication.processEvents()
         self.camera_controller.AOITop.setValue(top)
         self.camera_controller.AOILeft.setValue(left)
 
@@ -391,9 +405,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
         self.data_grabed_signal_temp.emit([DataFromPlugins(name='Andor SCMOS',
                                                            data=[np.zeros((len(self.y_axis), len(self.x_axis)))],
-                                                           dim='Data2D', labels=['dat0'],
-                                                           x_axis=self.x_axis,
-                                                           y_axis=self.y_axis), ])
+                                                           dim='Data2D', labels=['dat0'])])
 
         self.emit_status(ThreadCommand('close_splash'))
 
@@ -509,7 +521,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         self.temperature_timer.stop()
         QtWidgets.QApplication.processEvents()
-        self.camera_controller.close()
+        if self.camera_controller is not None:
+            self.camera_controller.stop()
+            self.camera_controller.close()
 
     def get_xaxis(self):
         """
@@ -523,9 +537,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         if self.camera_controller is not None:
             # if self.control_type == "camera":
             Nx = self.settings.child('camera_settings', 'image_size', 'Nx').value()
-            self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=np.int), label='Pixels')
-
-            self.emit_x_axis()
+            self.x_axis = Axis(data=np.linspace(0, Nx - 1, Nx, dtype=int), label='Pixels', index=1)
         else:
             raise (Exception('controller not defined'))
         return self.x_axis
@@ -541,8 +553,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         """
         if self.camera_controller is not None:
             Ny = self.settings.child('camera_settings', 'image_size', 'Ny').value()
-            self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=np.int), label='Pixels')
-            self.emit_y_axis()
+            self.y_axis = Axis(data=np.linspace(0, Ny - 1, Ny, dtype=int), label='Pixels', index=0)
         else:
             raise (Exception('Camera not defined'))
         return self.y_axis
@@ -566,7 +577,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
 
         # %% Initialize data: self.data for the memory to store new data and self.data_average to store the average data
         image_size = sizex * sizey
-        self.data = np.zeros((sizey, sizex), dtype=np.float)
+        self.data = np.zeros((sizey, sizex), dtype=float)
 
         bufSize = self.camera_controller.ImageSizeBytes.getValue()
         if not self.buffers or self.buffers[0].size != bufSize or self._reset_buffers_cmd:
@@ -591,7 +602,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             # init the viewers
             self.data_grabed_signal_temp.emit([DataFromPlugins(
                 name=self.settings.child('camera_settings', 'camera_model').value(),
-                data=[np.squeeze(self.data.reshape((sizex, sizey)).astype(np.float))], dim=self.data_shape)])
+                data=[np.squeeze(self.data.reshape((sizex, sizey)).astype(float))], dim=self.data_shape,)])
 
         return True
 
@@ -647,11 +658,12 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             stop the camera's actions.
         """
         try:
-            self.stop_waitloop.emit()
-            if self.camera_controller.CameraAcquiring.getValue():
-                self.camera_controller.AcquisitionStop()
-            QtWidgets.QApplication.processEvents()
-            self.temperature_timer.start(2000)
+            if self.controller is not None:
+                self.stop_waitloop.emit()
+                if self.camera_controller.CameraAcquiring.getValue():
+                    self.camera_controller.AcquisitionStop()
+                QtWidgets.QApplication.processEvents()
+                self.temperature_timer.start(2000)
 
         except:
             pass
@@ -693,3 +705,7 @@ class AndorCallback(QtCore.QObject):
                 self.data_sig.emit([pData])
                 QtCore.QThread.msleep(wait_time)
 
+
+
+if __name__ == '__main__':
+    main(__file__, init=False)

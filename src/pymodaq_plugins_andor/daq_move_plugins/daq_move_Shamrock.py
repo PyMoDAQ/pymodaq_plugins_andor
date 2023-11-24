@@ -37,9 +37,6 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
             ]},
         ] + comon_parameters_fun(is_multiaxes, axes_names, epsilon=_epsilon)
 
-    def __init__(self, parent=None, params_state=None):
-        super().__init__(parent, params_state)  # initialize base class with common attributes and methods
-
     def commit_settings(self, param):
         """
             | Activate parameters changes on the hardware from parameter's name.
@@ -68,7 +65,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
             elif param.name() == 'zero_order':
                 if param.value():
                     param.setValue(False)
-                    self.emit_status(ThreadCommand('show_splash', ["Moving to zero order, please wait!"]))
+                    self.emit_status(ThreadCommand('show_splash', "Moving to zero order, please wait!"))
                     err = self.shamrock_controller.GotoZeroOrderSR(0)
                     if err != 'SHAMROCK_SUCCESS':
                         raise Exception(err)
@@ -95,14 +92,14 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         self.shamrock_controller = self.ini_stage_init(old_controller=controller,
                                                        new_controller=shamrock_sdk.ShamrockSDK())
 
-        self.emit_status(ThreadCommand('show_splash', ["Set/Get Shamrock's settings"]))
+        self.emit_status(ThreadCommand('show_splash', "Set/Get Shamrock's settings"))
         self.ini_spectro()
 
         initialized = True
         self.emit_status(ThreadCommand('close_splash'))
         return '', initialized
 
-    def check_position(self):
+    def get_actuator_value(self):
         """Get the current position from the hardware with scaling conversion.
 
         Returns
@@ -113,10 +110,9 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         ##
 
         pos = self.get_position_with_scaling(pos)
-        self.emit_status(ThreadCommand('check_position', [pos]))
         return pos
 
-    def move_Abs(self, position):
+    def move_abs(self, position):
         """ Move the actuator to the absolute target defined by position
 
         Parameters
@@ -134,7 +130,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         self.target_position = position
         self.poll_moving()  # start a loop to poll the current actuator value and compare it with target position
 
-    def move_Rel(self, position):
+    def move_rel(self, position):
         """ Move the actuator to the relative target actuator value defined by position
 
         Parameters
@@ -149,11 +145,11 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
 
         self.poll_moving()
 
-    def move_Home(self):
+    def move_home(self):
         """
 
         """
-        self.move_Abs(self.settings.child('spectro_settings', 'spectro_wl_home').value())
+        self.move_abs(self.settings.child('spectro_settings', 'spectro_wl_home').value())
 
     def stop_motion(self):
         """
@@ -171,10 +167,11 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         """
 
         """
-        self.shamrock_controller.close()
+        if self.shamrock_controller is not None:
+            self.shamrock_controller.close()
 
     def set_wavelength(self, wavelength):
-        self.emit_status(ThreadCommand('show_splash', ["Setting wavelength, please wait!"]))
+        self.emit_status(ThreadCommand('show_splash', "Setting wavelength, please wait!"))
         err = self.shamrock_controller.SetWavelengthSR(0, wavelength)
         self.emit_status(ThreadCommand('close_splash'))
 
@@ -212,7 +209,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         set the current grating to ind_grating+1. ind_grating corresponds to the index in the GUI graitng list while the SDK index starts at 1...
 
         """
-        self.emit_status(ThreadCommand('show_splash', ["Moving grating please wait"]))
+        self.emit_status(ThreadCommand('show_splash', "Moving grating please wait"))
         err = self.shamrock_controller.SetGratingSR(0, ind_grating + 1)
         err, ind_grating = self.shamrock_controller.GetGratingSR(0)
 

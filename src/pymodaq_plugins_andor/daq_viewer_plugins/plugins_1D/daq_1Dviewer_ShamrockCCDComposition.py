@@ -5,15 +5,15 @@ from pymodaq_plugins_andor.daq_viewer_plugins.plugins_2D.daq_2Dviewer_AndorCCD i
 from pymodaq_plugins_andor.daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
 
 from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
-from pymodaq.utils.data import Axis, DataFromPlugins
+from pymodaq.utils.data import Axis, DataFromPlugins, DataToExport
 from pymodaq.utils.parameter import utils as putils
-from pymodaq.control_modules.viewer_utility_classes import main
+from pymodaq.control_modules.viewer_utility_classes import main, DAQ_Viewer_base, comon_parameters
 from pymodaq.utils.logger import set_logger, get_module_name
 
 logger = set_logger(get_module_name(__file__))
 
 
-class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
+class DAQ_1DViewer_ShamrockCCDComposition(DAQ_2DViewer_AndorCCD):
     """
         =============== ==================
 
@@ -35,27 +35,28 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         d['visible'] = True
 
     params = [{'title': 'Get Calibration:', 'name': 'get_calib', 'type': 'bool_push', 'value': False,
-              'label': 'Update!'}] + param_camera + params_shamrock
+              'label': 'Update!'},] + param_camera + [
+              {'title': 'Shamrock Settings:', 'name': 'sham_settings', 'type': 'group', 'children': params_shamrock},
+    ]
 
-    def __init__(self, parent=None, params_state=None):
-        DAQ_Move_Shamrock.__init__(self, parent, params_state)
-        DAQ_2DViewer_AndorCCD.__init__(self, parent, params_state)
 
-        self.camera_controller = None  # this will be the controller attribute of the  DAQ_2DViewer_AndorCCD instance
-        self.shamrock_controller = None  # this will be the controller attribute of the  DAQ_Move_Shamrock instance
-        # both plugins don't have the generic controller name 'controller' but specific one for this reason
+    def ini_attributes(self):
+        self.controller: DAQ_2DViewer_AndorCCD = None
+        self.shamrock_controller: DAQ_Move_Shamrock = None
 
         self.x_axis: Axis = None
         self.is_calibrated = False
+
+        super().ini_attributes()
 
     def commit_settings(self, param):
 
         if param.name() == 'flip_wavelength':
             self.get_xaxis()
         elif 'camera_settings' in putils.get_param_path(param):
-            DAQ_2DViewer_AndorCCD.commit_settings(self, param)
+            super().commit_settings(param)
         elif 'spectro_settings' in putils.get_param_path(param):
-            DAQ_Move_Shamrock.commit_settings(self, param)
+            self.shamrock_controller.commit_settings(param)
         QtWidgets.QApplication.processEvents()
         if param.name() == 'spectro_wl':
             self.is_calibrated = False
@@ -73,34 +74,36 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
                 param.setValue(False)
 
     def ini_detector(self, controller=None):
-        _, shamrock_initialized = DAQ_Move_Shamrock.ini_stage(self, controller)
-        QtWidgets.QApplication.processEvents()
-        # if status_shamrock.initialized:
-        #     self.move_Home()
-
-        _, camera_initialized = DAQ_2DViewer_AndorCCD.ini_detector(self, controller)
+        cam_status, cam_init = super().ini_detector(controller)
         QtWidgets.QApplication.processEvents()
 
-        initialized = shamrock_initialized and camera_initialized
+        self.shamrock_controller = DAQ_Move_Shamrock(None, self.settings.child('sham_settings').saveState())
+        self.shamrock_controller.settings = self.settings.child('sham_settings')
+        self.shamrock_controller.emit_status = self.emit_status
+        sham_status, sham_init = self.shamrock_controller.ini_stage(controller)
+
+        QtWidgets.QApplication.processEvents()
+
+
+        initialized = sham_init and cam_init
 
         self.setCalibration()
-        #self.emit_status(ThreadCommand('close_splash'))
-        return '', initialized
+        return sham_status + cam_status, initialized
 
     def setCalibration(self):
         #setNpixels
         width, height = self.get_pixel_size()
-        err = self.shamrock_controller.SetNumberPixelsSR(0, self.get_ROI_size_x())
-        err = self.shamrock_controller.SetPixelWidthSR(0, width)
+        err = self.shamrock_controller.controller.SetNumberPixelsSR(0, self.get_ROI_size_x())
+        err = self.shamrock_controller.controller.SetPixelWidthSR(0, width)
 
-        self.get_wavelength()
+        self.shamrock_controller.get_wavelength()
         self.x_axis = self.get_xaxis()
 
 
     def getCalibration(self):
 
-        if self.shamrock_controller is not None:
-            (err, calib) = self.shamrock_controller.GetCalibrationSR(0, self.get_ROI_size_x())
+        if self.shamrock_controller is not None and self.shamrock_controller.controller is not None:
+            (err, calib) = self.shamrock_controller.controller.GetCalibrationSR(0, self.get_ROI_size_x())
             if err != "SHAMROCK_SUCCESS":
                 raise Exception(err)
 
@@ -120,17 +123,19 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
                 Contains a vector of integer corresponding to the horizontal camera pixels.
         """
 
-        if np.abs(self.settings.child('spectro_settings', 'spectro_wl').value()) < 1e-3:
-            DAQ_2DViewer_AndorCCD.get_xaxis(self)
+        if self.shamrock_controller is None or np.abs(self.settings.child('sham_settings', 'spectro_settings', 'spectro_wl').value()) < 1e-3:
+            nx = self.get_ROI_size_x()
+            calib = np.linspace(0, nx, nx-1)
+            self.x_axis = Axis(data=calib, label='Wavelength (nm)')
         else:
             calib = self.getCalibration()
 
             if (calib.astype('int') != 0).all():  # check if calib values are equal to zero
-                if self.settings.child('spectro_settings', 'flip_wavelength').value():
+                if self.settings.child('sham_settings', 'spectro_settings', 'flip_wavelength').value():
                     calib = calib[::-1]
 
             else:
-                self.settings.child('spectro_settings', 'flip_wavelength').setValue(False)
+                self.settings.child('sham_settings', 'spectro_settings', 'flip_wavelength').setValue(False)
                 #self.emit_status(ThreadCommand('Update_Status', ['Impossible to flip wavelength', "log"]))
 
             self.x_axis = Axis(data=calib, label='Wavelength (nm)')
@@ -146,18 +151,21 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
         self.emit_status(ThreadCommand('exposure_ms', [self.settings.child('camera_settings', 'exposure').value()]))
 
     def stop(self):
-        DAQ_2DViewer_AndorCCD.stop(self)
+        if self.controller is not None:
+            super().stop()
+        if self.shamrock_controller is not None:
+            self.shamrock_controller.stop()
 
     def close(self):
-        if self.camera_controller is not None:
-            DAQ_2DViewer_AndorCCD.stop(self)
+        self.stop()
         if self.shamrock_controller is not None:
-            DAQ_Move_Shamrock.stop(self)
+            self.shamrock_controller.close()
+        super().close()
 
     def grab_data(self, Naverage=1, **kwargs):
         if not self.is_calibrated:
             self.get_xaxis()
-        DAQ_2DViewer_AndorCCD.grab_data(self, Naverage, **kwargs)
+        super().grab_data( Naverage, **kwargs)
 
     def emit_data(self):
         """
@@ -167,12 +175,16 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCD, DAQ_Move_Shamrock):
             self.ind_grabbed += 1
             sizey = self.settings.child('camera_settings', 'image_size', 'Ny').value()
             sizex = self.settings.child('camera_settings', 'image_size', 'Nx').value()
-            self.camera_controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
-            self.data_grabed_signal.emit([DataFromPlugins(name='Camera',
-                                                          data=[np.squeeze(
-                                                              self.data.reshape((sizey, sizex)).astype(float))],
-                                                          dim=self.data_shape,
-                                                          axes=[self.x_axis]),])
+            self.controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
+            self.dte_signal.emit(
+                DataToExport('Spectro',
+                             data=[
+                                 DataFromPlugins(name='Camera',
+                                                 data=[np.atleast_1d(np.squeeze(self.data.reshape(
+                                                     (sizey, sizex)))).astype(float)],
+                                                 dim=self.data_shape,
+                                                 axes=[self.x_axis]),
+                             ]))
             QtWidgets.QApplication.processEvents()  # here to be sure the timeevents are executed even if in continuous grab mode
 
         except Exception as e:

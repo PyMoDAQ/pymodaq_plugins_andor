@@ -46,6 +46,7 @@ if plat.startswith('Windows'):
     try:
         if sdk_path not in os.environ['path']:
             os.environ['path'] += ';' + sdk_path
+        os.add_dll_directory(sdk_path)
         _stdcall_libraries['ATCORE'] = ctypes.windll.LoadLibrary('atcore.dll')
         _stdcall_libraries['ATUTIL'] = ctypes.windll.LoadLibrary('atutility.dll')
     except OSError as e:

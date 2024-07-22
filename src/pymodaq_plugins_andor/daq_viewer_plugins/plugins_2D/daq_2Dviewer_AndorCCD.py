@@ -75,7 +75,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         --------
         utility_classes.DAQ_Viewer_base
     """
-    callback_signal = QtCore.Signal()
+    callback_signal = QtCore.Signal(int)
     hardware_averaging = True #will use the accumulate acquisition mode if averaging is neccessary
     params = comon_parameters+[
         {'title': 'Dll library:', 'name': 'andor_lib', 'type': 'browsepath', 'value': str(libpath)},
@@ -199,6 +199,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         """
         try:
             self.ind_grabbed += 1
+
             sizey = self.settings.child('camera_settings', 'image_size', 'Ny').value()
             sizex = self.settings.child('camera_settings', 'image_size', 'Nx').value()
             self.camera_controller.GetAcquiredDataNumpy(self.data_pointer, sizex * sizey)
@@ -529,7 +530,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             self.settings.child('camera_settings', 'exposure').setValue(timings['exposure'] * 1000)
             # %%%%% Start acquisition with the given exposure in ms, in "1d" or "2d" mode
             self.camera_controller.StartAcquisition()
-            self.callback_signal.emit()  # will trigger the waitfor acquisition
+            self.callback_signal.emit(self.Naverage)  # will trigger the waitfor acquisition
 
         except Exception as e:
             self.emit_status(ThreadCommand('Update_Status', [str(e), "log"]))
@@ -558,8 +559,9 @@ class AndorCallback(QtCore.QObject):
         super(AndorCallback, self).__init__()
         self.wait_fn = wait_fn
 
-    def wait_for_acquisition(self):
-        err = self.wait_fn()
+    def wait_for_acquisition(self, n_average: int):
+        for ind in range(n_average):
+            err = self.wait_fn()
 
         if err != 'DRV_NO_NEW_DATA':  # will be returned if the main thread called CancelWait
             self.data_sig.emit()

@@ -370,7 +370,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         # get max exposure range
         err, maxexpo = self.camera_controller.GetMaximumExposure()
         if err == 'DRV_SUCCESS':
-            self.settings.child('camera_settings', 'exposure').setLimits((0, maxexpo))
+            self.settings.child('camera_settings', 'exposure').setLimits((0, maxexpo * 1000))
 
         # set default read mode (full vertical binning)
         self.update_read_mode()

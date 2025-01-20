@@ -522,7 +522,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.temperature_timer.stop()
         QtWidgets.QApplication.processEvents()
         if self.camera_controller is not None:
-            self.camera_controller.stop()
+            self.stop()
             self.camera_controller.close()
 
     def get_xaxis(self):

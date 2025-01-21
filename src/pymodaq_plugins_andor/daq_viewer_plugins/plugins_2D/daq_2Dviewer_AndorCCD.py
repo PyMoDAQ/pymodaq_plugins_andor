@@ -5,14 +5,14 @@ from ctypes.util import find_library
 import platform
 from qtpy import QtWidgets, QtCore
 from easydict import EasyDict as edict
-from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
 
+from pymodaq_utils.utils import ThreadCommand, find_dict_in_list_from_key_val
+from pymodaq_gui.parameter.utils import iter_children
+
+from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
 from pymodaq.utils.data import DataFromPlugins, Axis, DataToExport
-from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
-from pymodaq.utils.parameter.utils import iter_children
 
 from pymodaq_plugins_andor.hardware.andor_sdk2 import sdk2
-
 
 libpath = sdk2.dllpath
 camera_list = sdk2.AndorSDK.GetCamerasInfo()

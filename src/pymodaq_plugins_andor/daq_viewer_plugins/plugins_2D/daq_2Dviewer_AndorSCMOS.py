@@ -6,11 +6,14 @@ from easydict import EasyDict as edict
 import numpy as np
 from qtpy import QtWidgets, QtCore
 
+from pymodaq_utils.utils import ThreadCommand, find_dict_in_list_from_key_val, zeros_aligned
+from pymodaq_utils.logger import set_logger, get_module_name
+
+from pymodaq_gui.parameter.utils import iter_children
+
 from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
-from pymodaq.utils.logger import set_logger, get_module_name
 from pymodaq.utils.data import DataFromPlugins, Axis
-from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val, zeros_aligned
-from pymodaq.utils.parameter.utils import iter_children
+
 
 arch, plat = platform.architecture()
 from time import perf_counter

@@ -1,7 +1,7 @@
 
 from easydict import EasyDict as edict
 from pymodaq.control_modules.move_utility_classes import DAQ_Move_base, comon_parameters_fun, main
-from pymodaq.utils.daq_utils import ThreadCommand
+from pymodaq_utils.utils import ThreadCommand
 from pymodaq_plugins_andor.hardware import shamrock_sdk
 
 

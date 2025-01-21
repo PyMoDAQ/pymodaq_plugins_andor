@@ -6,7 +6,7 @@ h5exporters = false  # true if plugin contains custom h5 file exporters
 scanners = false  # true if plugin contains custom scan layout (daq_scan extensions)
 
 [urls]
-package-url = 'https://github.com/PyMoDAQ/pymodaq_plugins_andor
+package-url = 'https://github.com/PyMoDAQ/pymodaq_plugins_andor'
 
 [project]
 name = "pymodaq_plugins_andor'

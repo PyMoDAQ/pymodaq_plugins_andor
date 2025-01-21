@@ -1,15 +1,18 @@
+
+import numpy as np
+from qtpy import QtWidgets
+
+from pymodaq_utils.utils import ThreadCommand, find_dict_in_list_from_key_val
+from pymodaq.utils.logger import set_logger, get_module_name
+
+from pymodaq_gui.parameter import utils as putils
+
+from pymodaq.utils.data import Axis, DataFromPlugins
+
 from ..plugins_2D.daq_2Dviewer_AndorSCMOS import DAQ_2DViewer_AndorSCMOS
 from ...daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
 
-import numpy as np
-from pymodaq.utils.daq_utils import ThreadCommand, find_dict_in_list_from_key_val
-from pymodaq.utils.data import Axis, DataFromPlugins
-from pymodaq.utils.parameter import utils as putils
-from qtpy import QtWidgets
-from pymodaq.utils.logger import set_logger, get_module_name
-
 logger = set_logger(get_module_name(__file__))
-
 
 
 class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamrock):

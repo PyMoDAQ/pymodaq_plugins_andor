@@ -440,9 +440,9 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         self.settings.child('camera_settings',
                             'frame_rate').setValue(self.camera_controller.FrameRate.getValue())
 
-
     def ini_camera(self):
-        sdk3cam.camReg.regCamera()
+        #sdk3cam.camReg.regCamera()
+
         self.camera_controller.init_camera()
 
         if not self.camera_controller.FullAOIControl.getValue():

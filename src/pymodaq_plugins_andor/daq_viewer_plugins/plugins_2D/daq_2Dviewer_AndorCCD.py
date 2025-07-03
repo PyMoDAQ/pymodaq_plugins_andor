@@ -13,6 +13,8 @@ from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, como
 from pymodaq.utils.data import DataFromPlugins, Axis, DataToExport
 
 from pymodaq_plugins_andor.hardware.andor_sdk2 import sdk2
+from pymodaq.utils.parameter import Parameter
+import re
 
 libpath = sdk2.dllpath
 camera_list = sdk2.AndorSDK.GetCamerasInfo()
@@ -106,9 +108,11 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                     {'title': 'End x:', 'name': 'im_endx', 'type': 'int', 'value': 1024 , 'default':1024, 'min':0},
                     {'title': 'Start y:', 'name': 'im_starty', 'type': 'int', 'value': 1 , 'default':1, 'min':1},
                     {'title': 'End y:', 'name': 'im_endy', 'type': 'int', 'value': 256, 'default':256, 'min':1,},
-                    ]},   
+                    ]},      
             ]},            
             {'title': 'Exposure (ms):', 'name': 'exposure', 'type': 'float', 'value': 0.01 , 'default':0.01, 'min': 0},
+            {'title' : 'EMCCD Gain', 'name' : 'emccd_gain', 'type' : 'int'},
+            {'title' : 'AD channels', 'name' : 'ad_channels', 'type' : 'group', 'children' : []},
             
             {'title': 'Image size:', 'name': 'image_size', 'type': 'group', 'children':[
                 {'title': 'Nx:', 'name': 'Nx', 'type': 'int', 'value': 0, 'default':0 , 'readonly': True},
@@ -179,8 +183,14 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
                 QtWidgets.QApplication.processEvents()
                 #self.get_exposure_ms()
 
+            elif param.name() == 'emccd_gain' :
+                self.camera_controller.SetEMCCDGain(param.value())
+
             elif param.name() in iter_children(self.settings.child('camera_settings', 'shutter'), []):
                 self.set_shutter()
+
+            elif param.name() in iter_children(self.settings.child('camera_settings', 'ad_channels'), []):
+                self.set_readout_speed(param.name())
 
             elif param.name() in iter_children(self.settings.child('camera_settings', 'readout_settings', 'image_settings')):
                 if self.settings.child('camera_settings', 'readout').value() == 'Image':
@@ -355,6 +365,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         model_param = self.settings.child('camera_settings', 'camera_model')
         cam_index = model_param.opts['limits'].index(model_param.value())
         self.camera_controller.SetCurrentCamera(camera_list[cam_index]['handle'])
+        self.camera_controller.init_AD_channels()
 
         self.CCDSIZEX, self.CCDSIZEY = self.camera_controller.GetDetector()
         self.settings.child('camera_settings', 'readout_settings',
@@ -372,6 +383,25 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
         err, maxexpo = self.camera_controller.GetMaximumExposure()
         if err == 'DRV_SUCCESS':
             self.settings.child('camera_settings', 'exposure').setLimits((0, maxexpo * 1000))
+
+        self.settings.child('camera_settings','emccd_gain').setLimits(self.camera_controller.GetEMGainRange())
+        
+        self.speed_dict = {}
+        for channel in range(self.camera_controller.channels) : 
+            self.speed_dict[channel] = {str(speed) : self.camera_controller.GetHSSpeed(channel,
+                                                                              self.camera_controller.amp_type,
+                                                                              speed).value for speed in range(self.camera_controller.GetNumberHSSpeeds(channel,
+                                                                                                                                            self.camera_controller.amp_type))}
+        children = []
+        for channel_key in self.speed_dict.keys() : 
+            
+            children.append(Parameter.create(type = 'list',
+                                     title = f'AD channel {channel_key}',
+                                     name = f'ad_channel_{channel}',
+                                     value = self.speed_dict[channel_key]['0'],
+                                     limits = self.speed_dict[channel_key].values()))
+        self.settings.child('camera_settings', 'ad_channels').addChildren(children)
+                
 
         # set default read mode (full vertical binning)
         self.update_read_mode()
@@ -416,6 +446,15 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
 
         self.camera_controller.SetShutter(typ, mode, self.settings.child('camera_settings', 'shutter', 'shutter_closing_time').value(),
                                           self.settings.child('camera_settings', 'shutter', 'shutter_opening_time').value())
+        
+    def set_readout_speed(self,param_name) : 
+        m = re.search(r"\d+$",param_name)
+        if m : 
+            adc = int(m.group())
+        self.camera_controller.SetADChannel(adc)
+        freq = self.settings.child('camera_settings','ad_channels', param_name).value()
+        ind = [ind for ind, speed in self.speed_dict[adc].items() if speed == freq][0]
+        self.camera_controller.SetHSSpeed(self.camera_controller.amp_type, ind )
 
     def updated_timer(self):
         """
@@ -512,6 +551,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             daq_utils.ThreadCommand
         """
         try:
+            print('Malik tu gères ! ')
             self.camera_done = False
 
             self.ind_grabbed = 0  # to keep track of the current image in the average

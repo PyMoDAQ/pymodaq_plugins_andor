@@ -76,6 +76,7 @@ class AndorSDK:
     def __init__(self):
         """
         """
+
     @classmethod
     def init_camera(cls):
         # Initialize the device
@@ -84,7 +85,6 @@ class AndorSDK:
         error = _dll.Initialize(byref(tekst))
         if error != 20002:
             raise IOError(ERROR_CODE[error])
-
 
     def __del__(self):
         _dll.ShutDown()
@@ -135,7 +135,8 @@ class AndorSDK:
             cls.init_camera()
             cameralist.append(dict(handle=handle,
                                    serial=cls.GetCameraSerialNumber(),
-                                   model=cls.GetHeadModel()))
+                                   model=cls.GetHeadModel()),
+                                   )
         return cameralist
 
     # Get Camera properties
@@ -172,6 +173,13 @@ class AndorSDK:
         if error != 20002:
             raise IOError(ERROR_CODE[error])
         return model.value.decode()
+    
+    def init_AD_channels(self) : 
+        self.channels = self.GetNumberADChannels()
+        try : 
+            self.amp_type = self.SetOutputAmplifier(0)
+        except IOError : 
+            self.amp_type = self.SetOutputAmplifier(1)
 
     def GetDetector(self):
         '''
@@ -208,7 +216,7 @@ class AndorSDK:
             raise IOError(ERROR_CODE[error])
         return (ERROR_CODE[error], maxbinning.value)
 
-    def GetNumberHSSpeeds(self):
+    def GetNumberHSSpeeds(self, channel, amp_type):
         '''
         Returns the number of HS speeds
 
@@ -219,7 +227,7 @@ class AndorSDK:
             (int) : the number of HS speeds
         '''
         noHSSpeeds = c_int()
-        error = _dll.GetNumberHSSpeeds(self._channel, self._outamp,
+        error = _dll.GetNumberHSSpeeds(channel, amp_type,
                                             byref(noHSSpeeds))
         if error != 20002:
             raise IOError(ERROR_CODE[error])
@@ -888,7 +896,7 @@ class AndorSDK:
         if error != 20002:
             raise IOError(ERROR_CODE[error])
 
-    def GetHSSpeed(self):
+    def GetHSSpeeds(self, channel, amp_type):
         '''
         Returns the available HS speeds of the selected channel
 
@@ -901,13 +909,29 @@ class AndorSDK:
         HSSpeed = c_float()
         HSSpeeds = []
         for i in range(self.GetNumberHSSpeeds()):
-            error = _dll.GetHSSpeed(self._channel, self._outamp, i, byref(HSSpeed))
+            error = _dll.GetHSSpeed(channel, amp_type, i, byref(HSSpeed))
             if error != 20002:
                 raise IOError(ERROR_CODE[error])
             HSSpeeds.append(HSSpeed.value)
         return HSSpeeds
+    
+    def GetHSSpeed(self, channel, amp_type, speed_index):
+        '''
+        Returns the available HS speeds of the selected channel
 
-    def SetHSSpeed(self, index):
+        Input:
+            None
+
+        Output:
+            (float[]) : The speeds of the selected channel
+        '''
+        HSSpeed = c_float()
+        error = _dll.GetHSSpeed(channel, amp_type, speed_index, byref(HSSpeed))
+        if error != 20002:
+            raise IOError(ERROR_CODE[error])
+        return HSSpeed
+
+    def SetHSSpeed(self, amp_type, index):
         '''
         Set the HS speed to the mode corresponding to the index
 
@@ -917,7 +941,7 @@ class AndorSDK:
         Output:
             None
         '''
-        error = _dll.SetHSSpeed(index)
+        error = _dll.SetHSSpeed(amp_type,index)
         if error != 20002:
             raise IOError(ERROR_CODE[error])
 

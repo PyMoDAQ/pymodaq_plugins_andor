@@ -195,7 +195,7 @@ class DAQ_Move_Shamrock(DAQ_Move_base):
         self.grating_list = []
         for ind_grating in range(1, Ngratings + 1):
             (err, lines, blaze, home, offset) = self.shamrock_controller.GetGratingInfoSR(0, ind_grating)
-            self.grating_list.append(str(int(lines)))
+            self.grating_list.append(f'G{ind_grating}_'+str(int(lines)))
 
         self.settings.child('spectro_settings', 'grating_settings', 'grating').setLimits(self.grating_list)
         err, ind_grating = self.shamrock_controller.GetGratingSR(0)

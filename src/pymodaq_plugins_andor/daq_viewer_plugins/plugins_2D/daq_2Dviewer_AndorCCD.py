@@ -453,7 +453,7 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             adc = int(m.group())
         self.camera_controller.SetADChannel(adc)
         freq = self.settings.child('camera_settings','ad_channels', param_name).value()
-        ind = [ind for ind, speed in self.speed_dict[adc].items() if speed == freq][0]
+        ind = int([ind for ind, speed in self.speed_dict[adc].items() if speed == freq][0])
         self.camera_controller.SetHSSpeed(self.camera_controller.amp_type, ind )
 
     def updated_timer(self):
@@ -551,7 +551,6 @@ class DAQ_2DViewer_AndorCCD(DAQ_Viewer_base):
             daq_utils.ThreadCommand
         """
         try:
-            print('Malik tu gères ! ')
             self.camera_done = False
 
             self.ind_grabbed = 0  # to keep track of the current image in the average

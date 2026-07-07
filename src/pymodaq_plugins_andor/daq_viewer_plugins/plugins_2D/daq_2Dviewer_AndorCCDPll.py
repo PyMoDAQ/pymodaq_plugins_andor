@@ -40,7 +40,7 @@ class Andor_Camera_ReadOut(StrEnum):
 
 cam_params.extend(
     [
-        {'title': 'Readout Modes:', 'name': 'readout', 'type': 'list', 'limits': Andor_Camera_ReadOut.names()[0:-1],
+        {'title': 'Readout Modes:', 'name': 'readout', 'type': 'list', 'limits': Andor_Camera_ReadOut.names(),
          'value': 'FullVertBinning'},
 
         {'title': 'Readout Settings:', 'name': 'readout_settings', 'type': 'group', 'children': [
@@ -67,9 +67,11 @@ cam_params.extend(
             {'title': 'Opening time (ms):', 'name': 'shutter_opening_time', 'type': 'int', 'value': 10, 'tip': 'millisecs it takes to open'},
         ]},
         {'title': 'Temperature Settings:', 'name': 'temperature_settings', 'type': 'group', 'children': [
+            {'title': 'Enable Cooling:', 'name': 'enable_cooling', 'type': 'bool', 'value': True},
             {'title': 'Set Point:', 'name': 'set_point', 'type': 'float', 'value': -60, 'default': -60},
             {'title': 'Current value:', 'name': 'current_value', 'type': 'float', 'value': 0, 'default': 0,
                 'readonly': True},
+            {'title': 'Status:', 'name': 'status', 'type': 'str', 'limits': [], 'readonly': True},
         ]},
     ]
 )
@@ -102,7 +104,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
 
         self.ccdsize_x = None
         self.ccdsize_y = None
-        self.amp_modes = None
+        self.amp_modes = []
 
         self.temperature_timer = QtCore.QTimer()
         self.temperature_timer.timeout.connect(self.update_temperature)
@@ -156,8 +158,8 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
 
         # set amp mode
         self.controller.init_amp_mode()
-        self.settings.child('readout_speed').setLimits(self.get_all_amp_modes())
-        self.settings.child('readout_speed').setValue(self.get_amp_mode())
+        self.settings.child('amp_mode').setLimits(self.get_all_amp_modes())
+        self.settings.child('amp_mode').setValue(self.get_amp_mode())
 
         self.update_read_mode()
         self.setup_shutter()
@@ -167,7 +169,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
         modes = self.controller.get_all_amp_modes()
         mode_names = []
         for mode in modes:
-            name = 'CH'+str(mode.channel)+' oamp'+(mode.oamp)+' '+f'{mode.hsspeed_MHz:.2f}'+'MHz gain='+str(mode.preamp_gain)
+            name = 'CH'+str(mode.channel)+' oamp'+str(mode.oamp)+' '+f'{mode.hsspeed_MHz:.2f}'+'MHz gain='+str(mode.preamp_gain)
             mode_names.append(name)
             dict_mode = {'name': name,
                          'channel': mode.channel,
@@ -179,7 +181,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
 
     def get_amp_mode(self):
         mode = self.controller.get_amp_mode()
-        name = 'CH'+str(mode.channel)+' oamp'+(mode.oamp)+' '+f'{mode.hsspeed_MHz:.2f}'+'MHz gain='+str(mode.preamp_gain)
+        name = 'CH'+str(mode.channel)+' oamp'+str(mode.oamp)+' '+f'{mode.hsspeed_MHz:.2f}'+'MHz gain='+str(mode.preamp_gain)
         return name
 
     def set_amp_mode(self, name):
@@ -259,17 +261,21 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
     def setup_shutter(self):
         mode = self.settings['shutter', 'shutter_mode']
         ttl = self.settings['shutter', 'shutter_type']
+        if ttl == 'low':
+            ttl_mode = 0
+        elif ttl == 'high':
+            ttl_mode = 1
         open_time = self.settings['shutter', 'shutter_opening_time']
         close_time = self.settings['shutter', 'shutter_closing_time']
-        self.controller.setup_shutter(mode, ttl, open_time, close_time)
+        self.controller.setup_shutter(mode, ttl_mode, open_time, close_time)
 
     def setup_temperature(self):
         if not self.controller.is_cooler_on():
             self.controller.set_cooler(True)
 
         temp = self.controller.get_temperature_range()
-        temp_status = self.controller.get_temperature_status()
-        self.settings.child('temperature_settings', 'status').setLimits(temp_status.values)
+        status = self.controller.get_temperature_status()
+        self.settings.child('temperature_settings', 'status').setValue(status)
         self.settings.child('temperature_settings', 'set_point').setLimits((temp[0], temp[1]))
         enable = self.settings['temperature_settings', 'enable_cooling']
         self.controller.set_temperature(self.settings['temperature_settings', 'set_point'], enable)

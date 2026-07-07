@@ -1,4 +1,7 @@
 title = 'this is the configuration file of the Andor plugin'
 
+[sdk2]
+dll_path = ""  # in case the library cannot load properly try to add here the path to the sdk3 libraries
+
 [sdk3]
 dll_path = ""  # in case the library cannot load properly try to add here the path to the sdk3 libraries

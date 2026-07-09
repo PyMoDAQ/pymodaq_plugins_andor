@@ -242,8 +242,8 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
 
             hstart, hend, vstart, vend, hbin, vbin = self.controller.get_roi()
             self.controller.setup_image_mode(hstart, hend, vstart, vend, hbin, vbin)
-            self.settings.child('camera_settings', 'image_size', 'Nx').setValue(int((hend - hstart + 1) / hbin))
-            self.settings.child('camera_settings', 'image_size', 'Ny').setValue(int((vend - vstart + 1) / vbin))
+            self.settings.child('hdet').setValue(int((hend - hstart + 1) / hbin))
+            self.settings.child('vdet').setValue(int((vend - vstart + 1) / vbin))
 
         self.compute_axes()
 

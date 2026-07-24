@@ -5,3 +5,6 @@ dll_path = ""  # in case the library cannot load properly try to add here the pa
 
 [sdk3]
 dll_path = ""  # in case the library cannot load properly try to add here the path to the sdk3 libraries
+
+[shamrock]
+dll_path = ""

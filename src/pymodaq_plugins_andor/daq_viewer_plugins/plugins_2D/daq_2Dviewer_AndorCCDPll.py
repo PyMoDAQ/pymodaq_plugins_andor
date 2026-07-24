@@ -142,7 +142,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
                 self.settings.child('timing_opts', 'exposure_time').setValue(exposure * 1000)
                 QtWidgets.QApplication.processEvents()
 
-            elif param.name() in iter_children(self.settings.child('camera_settings', 'shutter'), []):
+            elif param.name() in iter_children(self.settings.child('shutter'), []):
                 self.setup_shutter()
 
         except Exception as e:
@@ -181,7 +181,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
 
     def get_amp_mode(self):
         mode = self.controller.get_amp_mode()
-        name = 'CH'+str(mode.channel)+' oamp'+str(mode.oamp)+' '+f'{mode.hsspeed_MHz:.2f}'+'MHz gain='+str(mode.preamp_gain)
+        name = 'ch'+str(mode.channel)+' oamp'+str(mode.oamp)+' '+f'{mode.hsspeed_MHz:.2f}'+'MHz gain='+str(mode.preamp_gain)
         return name
 
     def set_amp_mode(self, name):
@@ -242,8 +242,8 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
 
             hstart, hend, vstart, vend, hbin, vbin = self.controller.get_roi()
             self.controller.setup_image_mode(hstart, hend, vstart, vend, hbin, vbin)
-            self.settings.child('hdet').setValue(int((hend - hstart + 1) / hbin))
-            self.settings.child('vdet').setValue(int((vend - vstart + 1) / vbin))
+            self.settings.child('hdet').setValue(int((hend - hstart) / hbin))
+            self.settings.child('vdet').setValue(int((vend - vstart) / vbin))
 
         self.compute_axes()
 

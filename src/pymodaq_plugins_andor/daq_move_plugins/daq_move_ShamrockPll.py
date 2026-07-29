@@ -8,7 +8,7 @@ from pymodaq_utils.utils import ThreadCommand  # object used to send info back t
 from pylablib.devices.Andor.Shamrock import ShamrockSpectrograph
 from pymodaq_plugins_andor.hardware.shamrock_utils import get_spectrometers
 
-SPEC_NAMES = get_spectrometers()
+
 
 class DAQ_Move_ShamrockPll(DAQ_Move_base):
     """ Instrument plugin class for the Shamrock series of spectrometers by Andor.
@@ -26,6 +26,8 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
     _controller_units: Union[str, List[str]] = ['nm']
     _epsilon: Union[float, List[float]] = 0.1
     data_actuator_type = DataActuatorType.DataActuator
+
+    SPEC_NAMES = get_spectrometers()
 
 
     spectro_params = [
@@ -52,7 +54,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
 
     def ini_attributes(self):
 
-        self.shamrock_controller: ShamrockSpectrograph = None
+        self.controller: ShamrockSpectrograph = None
         self.gratings_list = []
 
     def get_actuator_value(self) -> DataActuator:
@@ -62,7 +64,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
         -------
         float: The position obtained after scaling conversion.
         """
-        pos = DataActuator(data=self.shamrock_controller.get_wavelength(),  # when writing your own plugin replace this line
+        pos = DataActuator(data=self.controller.get_wavelength(),  # when writing your own plugin replace this line
                            units='m')
         pos = self.get_position_with_scaling(pos)
         return pos
@@ -70,7 +72,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
     def close(self):
         """Terminate the communication protocol"""
         if self.is_master:
-            self.shamrock_controller.close()
+            self.controller.close()
 
     def commit_settings(self, param):
         try:
@@ -81,31 +83,31 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
                 self.get_set_grating(self.grating_list.index(param.value())+1)
 
             elif param.name() == 'grating_offset':
-                self.shamrock_controller.set_grating_offset(param.value())
+                self.controller.set_grating_offset(param.value())
 
             elif param.name() == 'spectro_wl':
                 self.emit_status(ThreadCommand('show_splash', "Setting wavelength please wait"))
-                self.shamrock_controller.set_wavelength(param.value()*1e-9)
+                self.controller.set_wavelength(param.value()*1e-9)
                 self.emit_status(ThreadCommand('close_splash'))
 
             elif param.name() == 'zero_order':
                 self.emit_status(ThreadCommand('show_splash', "Moving to zero order please wait"))
-                self.shamrock_controller.goto_zero_order()
+                self.controller.goto_zero_order()
                 self.emit_status(ThreadCommand('close_splash'))
 
             elif param.name() == 'slit_width':
                 self.emit_status(ThreadCommand('show_splash', "Setting slit width please wait"))
-                self.shamrock_controller.set_slit_width(param.value()*1e-6)
+                self.controller.set_slit_width(param.value()*1e-6)
                 self.emit_status(ThreadCommand('close_splash'))
 
             elif param.name() == 'input_port':
                 self.emit_status(ThreadCommand('show_splash', "Setting input port please wait"))
-                self.shamrock_controller.set_flipper_port('input', param.value())
+                self.controller.set_flipper_port('input', param.value())
                 self.emit_status(ThreadCommand('close_splash'))
 
             elif param.name() == 'output_port':
                 self.emit_status(ThreadCommand('show_splash', "Setting output port please wait"))
-                self.shamrock_controller.set_flipper_port('output', param.value())
+                self.controller.set_flipper_port('output', param.value())
                 self.emit_status(ThreadCommand('close_splash'))
 
         except Exception as e:
@@ -127,11 +129,11 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
         """
         if self.is_master:
             idx = SPEC_NAMES.index(self.settings['spectro_sn'])
-            self.shamrock_controller = ShamrockSpectrograph(idx=idx)
+            self.controller = ShamrockSpectrograph(idx=idx)
             initialized = self.ini_spectro()
 
         else:
-            self.shamrock_controller = controller
+            self.controller = controller.shamrock
             initialized = True
 
         info = "Spectrometer initialized"
@@ -149,7 +151,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
         self.target_value = value
         value = self.set_position_with_scaling(value)  # apply scaling if the user specified one
 
-        self.shamrock_controller.set_wavelength(value.value('m'))  # when writing your own plugin replace this line
+        self.controller.set_wavelength(value.value('m'))  # when writing your own plugin replace this line
         self.emit_status(ThreadCommand('Update_Status', ['Central wavelength updated']))
 
     def move_rel(self, value: DataActuator):
@@ -170,7 +172,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
         """Call the reference method of the controller"""
 
         home = DataActuator(data=self.settings['spectro_settings', 'spectro_wl_home'], units='nm')
-        self.shamrock_controller.set_wavelength(home.value('m'))
+        self.controller.set_wavelength(home.value('m'))
         self.emit_status(ThreadCommand('Update_Status', ['Spectrometer at zero order']))
 
     def stop_motion(self):
@@ -180,31 +182,31 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
 
     def ini_spectro(self):
         # get/set grating info
-        n_gratings = self.shamrock_controller.get_gratings_number()
+        n_gratings = self.controller.get_gratings_number()
         for i in range(n_gratings):
-            info = self.shamrock_controller.get_grating_info(i)
+            info = self.controller.get_grating_info(i)
             self.gratings_list.append(info[0])
         self.settings.child('spectro_settings', 'grating_settings', 'grating').setLimits(self.grating_list)
 
-        idx = self.shamrock_controller.get_grating()
+        idx = self.controller.get_grating()
         self.get_set_grating(idx=idx)
 
         # get/set input/output port info
-        if self.shamrock_controller.is_flipper_present('input'):
-            input = self.shamrock_controller.get_flipper_port('input')
+        if self.controller.is_flipper_present('input'):
+            input = self.controller.get_flipper_port('input')
             self.settings.child('spectro_settings', 'input_port').setValue(input)
         else:
             self.settings.child('spectro_settings', 'input_port').hide()
 
-        if self.shamrock_controller.is_flipper_present('output'):
-            output = self.shamrock_controller.get_flipper_port('output')
+        if self.controller.is_flipper_present('output'):
+            output = self.controller.get_flipper_port('output')
             self.settings.child('spectro_settings', 'output_port').setValue(output)
         else:
             self.settings.child('spectro_settings', 'output_port').hide()
 
         #check if auto slitwidth is present
-        if self.shamrock_controller.is_slit_present():
-            width = self.shamrock_controller.get_slit_width()*1e6
+        if self.controller.is_slit_present():
+            width = self.controller.get_slit_width()*1e6
             self.settings.child('spectro_settings', 'slit_width').setValue(width)
         else:
             self.settings.child('spectro_settings', 'slit_width').hide()
@@ -213,16 +215,16 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
         # idx starts at 1 (hardware specification)
 
         self.emit_status(ThreadCommand('show_splash', "Moving grating please wait"))
-        self.shamrock_controller.set_grating(idx)
-        idx = self.shamrock_controller.get_grating()
+        self.controller.set_grating(idx)
+        idx = self.controller.get_grating()
 
-        info = self.shamrock_controller.get_grating_info(idx)
+        info = self.controller.get_grating_info(idx)
         self.settings.child('spectro_settings', 'grating_settings', 'grating').setValue(info[0])
         self.settings.child('spectro_settings', 'grating_settings', 'lines').setValue(info[0])
         self.settings.child('spectro_settings', 'grating_settings', 'blaze').setValue(info[1])
         self.settings.child('spectro_settings', 'grating_settings', 'grating_offset').setValue(info[3])
 
-        (wl_min_m, wl_max_m) = self.shamrock_controller.get_wavelength_limits()
+        (wl_min_m, wl_max_m) = self.controller.get_wavelength_limits()
         wl_min = wl_min_m*1e9
         wl_max = wl_max_m*1e9
         self.settings.child('spectro_settings',

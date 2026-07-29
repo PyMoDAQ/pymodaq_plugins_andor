@@ -151,6 +151,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
     def ini_detector_custom(self, controller=None):
 
         ind_camera = self.settings.child('serial_number').opts['limits'].index(self.settings['serial_number'])
+        ind_spectro = SPEC_NAMES.index(self.settings['spectro_sn'])
         if self.is_master:
             self.controller = AndorSDK2Camera(idx=ind_camera)
 

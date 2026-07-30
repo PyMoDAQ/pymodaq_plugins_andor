@@ -10,7 +10,7 @@ logger = set_logger(get_module_name(__file__))
 config = GlobalConfig()
 
 
-if config('andor', 'shamrock', 'dll_path') is not "":
+if config('andor', 'shamrock', 'dll_path') != "":
     pll.par["devices/dlls/andor_shamrock"] = config('andor', 'shamrock', 'dll_path')
 
 

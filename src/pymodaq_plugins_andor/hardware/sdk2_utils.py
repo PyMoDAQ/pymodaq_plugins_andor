@@ -11,7 +11,7 @@ logger = set_logger(get_module_name(__file__))
 config = GlobalConfig()
 
 
-if config('andor', 'sdk2', 'dll_path') is not "":
+if config('andor', 'sdk2', 'dll_path') != "":
     pll.par["devices/dlls/andor_sdk2"] = config('andor', 'sdk2', 'dll_path')
 
 

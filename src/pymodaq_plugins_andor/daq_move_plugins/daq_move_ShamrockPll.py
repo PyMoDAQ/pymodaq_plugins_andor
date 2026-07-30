@@ -4,10 +4,8 @@ from pymodaq.control_modules.move_utility_classes import (DAQ_Move_base, comon_p
 
 from pymodaq_utils.utils import ThreadCommand  # object used to send info back to the main thread
 
-
 from pylablib.devices.Andor.Shamrock import ShamrockSpectrograph
 from pymodaq_plugins_andor.hardware.shamrock_utils import get_spectrometers
-
 
 
 class DAQ_Move_ShamrockPll(DAQ_Move_base):
@@ -36,8 +34,9 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
         {'title': 'Spectro Settings:', 'name': 'spectro_settings', 'type': 'group', 'expanded': True, 'children': [
             {'title': 'Wavelength (nm):', 'name': 'spectro_wl', 'type': 'float', 'value': 600, 'min': 0},
             {'title': 'Home Wavelength (nm):', 'name': 'spectro_wl_home', 'type': 'float', 'value': 600},
-            {'title': 'Slit Width (um):', 'name': 'slit_width', 'type': 'int', 'value': 100, 'min': 0},
+            {'title': 'Input Slit Width (um):', 'name': 'input_slit_width', 'type': 'int', 'value': 100, 'min': 0},
             {'title': 'Input Port:', 'name': 'input_port', 'type': 'list', 'limits': ['direct', 'side']},
+            {'title': 'Output Slit Width (um):', 'name': 'output_slit_width', 'type': 'int', 'value': 100, 'min': 0},
             {'title': 'Output Port:', 'name': 'output_port', 'type': 'list', 'limits': ['direct', 'side']},
             {'title': 'Grating Settings:', 'name': 'grating_settings', 'type': 'group', 'expanded': True, 'children': [
                 {'title': 'Grating:', 'name': 'grating', 'type': 'list'},
@@ -50,7 +49,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
             {'title': 'Go to zero order:', 'name': 'zero_order', 'type': 'bool'},
         ]},
     ]
-    params = spectro_params + comon_parameters_fun(is_multiaxes, axis_names=_axis_names, epsilon=_epsilon)
+    params = comon_parameters_fun(is_multiaxes, axis_names=_axis_names, epsilon=_epsilon) + spectro_params
 
     def ini_attributes(self):
 
@@ -80,7 +79,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
                 self.ini_stage()
 
             elif param.name() == 'grating':
-                self.get_set_grating(self.grating_list.index(param.value())+1)
+                self.get_set_grating(self.gratings_list.index(param.value())+1)
 
             elif param.name() == 'grating_offset':
                 self.controller.set_grating_offset(param.value())
@@ -95,19 +94,34 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
                 self.controller.goto_zero_order()
                 self.emit_status(ThreadCommand('close_splash'))
 
-            elif param.name() == 'slit_width':
-                self.emit_status(ThreadCommand('show_splash', "Setting slit width please wait"))
-                self.controller.set_slit_width(param.value()*1e-6)
+            elif param.name() == 'input_slit_width':
+                self.emit_status(ThreadCommand('show_splash', "Setting input slit width please wait"))
+                self.controller.set_slit_width(self.get_current_slit('input'), param.value()*1e-6)
+                self.emit_status(ThreadCommand('close_splash'))
+
+            elif param.name() == 'output_slit_width':
+                self.emit_status(ThreadCommand('show_splash', "Setting output slit width please wait"))
+                self.controller.set_slit_width(self.get_current_slit('output'), param.value()*1e-6)
                 self.emit_status(ThreadCommand('close_splash'))
 
             elif param.name() == 'input_port':
                 self.emit_status(ThreadCommand('show_splash', "Setting input port please wait"))
                 self.controller.set_flipper_port('input', param.value())
+                if self.controller.is_slit_present(self.get_current_slit('input')):
+                    width = self.controller.get_slit_width(self.get_current_slit('input')) * 1e6
+                    self.settings.child('spectro_settings', 'input_slit_width').setValue(width)
+                else:
+                    self.settings.child('spectro_settings', 'input_slit_width').hide()
                 self.emit_status(ThreadCommand('close_splash'))
 
             elif param.name() == 'output_port':
                 self.emit_status(ThreadCommand('show_splash', "Setting output port please wait"))
                 self.controller.set_flipper_port('output', param.value())
+                if self.controller.is_slit_present(self.get_current_slit('output')):
+                    width = self.controller.get_slit_width(self.get_current_slit('output')) * 1e6
+                    self.settings.child('spectro_settings', 'output_slit_width').setValue(width)
+                else:
+                    self.settings.child('spectro_settings', 'output_slit_width').hide()
                 self.emit_status(ThreadCommand('close_splash'))
 
         except Exception as e:
@@ -128,13 +142,13 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
             False if initialization failed otherwise True
         """
         if self.is_master:
-            idx = SPEC_NAMES.index(self.settings['spectro_sn'])
+            idx = self.SPEC_NAMES.index(self.settings['spectro_sn'])
             self.controller = ShamrockSpectrograph(idx=idx)
-            initialized = self.ini_spectro()
 
         else:
             self.controller = controller.shamrock
-            initialized = True
+
+        initialized = self.ini_spectro()
 
         info = "Spectrometer initialized"
         return info, initialized
@@ -177,16 +191,16 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
 
     def stop_motion(self):
         """Stop the actuator and emits move_done signal"""
-        self.move_done() # to let the interface know the actuator stopped. Direct call as the setwavelength call is
+        self.move_done() # to let the interface know the actuator stopped. Direct call as the set_wavelength call is
         # blocking anyway
 
     def ini_spectro(self):
         # get/set grating info
         n_gratings = self.controller.get_gratings_number()
-        for i in range(n_gratings):
+        for i in range(1, n_gratings+1):
             info = self.controller.get_grating_info(i)
             self.gratings_list.append(info[0])
-        self.settings.child('spectro_settings', 'grating_settings', 'grating').setLimits(self.grating_list)
+        self.settings.child('spectro_settings', 'grating_settings', 'grating').setLimits(self.gratings_list)
 
         idx = self.controller.get_grating()
         self.get_set_grating(idx=idx)
@@ -205,11 +219,18 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
             self.settings.child('spectro_settings', 'output_port').hide()
 
         #check if auto slitwidth is present
-        if self.controller.is_slit_present():
-            width = self.controller.get_slit_width()*1e6
-            self.settings.child('spectro_settings', 'slit_width').setValue(width)
+        if self.controller.is_slit_present(self.get_current_slit('input')):
+            width = self.controller.get_slit_width(self.get_current_slit('input'))*1e6
+            self.settings.child('spectro_settings', 'input_slit_width').setValue(width)
         else:
-            self.settings.child('spectro_settings', 'slit_width').hide()
+            self.settings.child('spectro_settings', 'input_slit_width').hide()
+        if self.controller.is_slit_present(self.get_current_slit('output')):
+            width = self.controller.get_slit_width(self.get_current_slit('output'))*1e6
+            self.settings.child('spectro_settings', 'output_slit_width').setValue(width)
+        else:
+            self.settings.child('spectro_settings', 'output_slit_width').hide()
+
+        return True
 
     def get_set_grating(self, idx):
         # idx starts at 1 (hardware specification)
@@ -236,6 +257,10 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
                                                        tip=f'Possible values are within {wl_min} and {wl_max} for'
                                                            f' the selected grating')
         self.emit_status(ThreadCommand('close_splash'))
+
+    def get_current_slit(self, path):
+        port = self.settings['spectro_settings', path+'_port']
+        return path+'_'+port
 
 
 if __name__ == '__main__':

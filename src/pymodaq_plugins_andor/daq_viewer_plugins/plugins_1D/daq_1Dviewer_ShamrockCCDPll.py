@@ -8,7 +8,7 @@ from pymodaq_utils.utils import ThreadCommand
 from pymodaq_gui.parameter import utils as putils
 
 from pymodaq.utils.data import Axis, DataFromPlugins, DataToExport
-from pymodaq.control_modules.viewer_utility_classes import main
+from pymodaq.control_modules.viewer_utility_classes import main, comon_parameters
 
 from pymodaq_plugins_andor.daq_viewer_plugins.plugins_2D.daq_2Dviewer_AndorCCDPll import DAQ_2DViewer_AndorCCDPll
 from pymodaq_plugins_andor.daq_move_plugins.daq_move_ShamrockPll import DAQ_Move_ShamrockPll
@@ -18,7 +18,7 @@ from pymodaq_plugins_andor.hardware.shamrockccd_utils import ShamrockCCDCompo
 logger = set_logger(get_module_name(__file__))
 
 
-class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
+class DAQ_1DViewer_ShamrockCCDPll(DAQ_2DViewer_AndorCCDPll):
     """
         =============== ==================
 
@@ -28,7 +28,6 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
         --------
         utility_classes.DAQ_Viewer_base
     """
-    params_camera = DAQ_2DViewer_AndorCCDPll.params
     params_shamrock = DAQ_Move_ShamrockPll.params
     putils.get_param_dict_from_name(params_shamrock, 'andor_lib', pop=True)
 
@@ -39,10 +38,9 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
     if d is not None:
         d['visible'] = True
 
-    params = [{'title': 'Get Calibration:', 'name': 'get_calib', 'type': 'bool_push', 'value': False,
-              'label': 'Update!'},] + [
-              {'title': 'Camera Settings:', 'name': 'sham_settings', 'type': 'group', 'children': params_camera},
-              {'title': 'Shamrock Settings:', 'name': 'sham_settings', 'type': 'group', 'children': params_shamrock},
+    params = DAQ_2DViewer_AndorCCDPll.params + [
+        {'title': 'Get Calibration:', 'name': 'get_calib', 'type': 'bool_push', 'value': False, 'label': 'Update!'},
+        {'title': 'Shamrock Settings', 'name': 'sham_settings', 'type': 'group', 'children': params_shamrock},
     ]
 
     def ini_attributes(self):
@@ -56,11 +54,10 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
 
     def commit_settings(self, param):
 
+        super().commit_settings(param)
         if param.name() == 'flip_wavelength':
             self.get_xaxis()
-        elif 'camera_settings' in putils.get_param_path(param):
-            super().commit_settings(param)
-        elif 'spectro_settings' in putils.get_param_path(param):
+        elif 'sham_settings' in putils.get_param_path(param):
             self.shamrock_controller.commit_settings(param)
         QtWidgets.QApplication.processEvents()
         if param.name() == 'spectro_wl':
@@ -71,7 +68,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
         elif param.name() == 'flip_wavelength':
             self.get_xaxis()
         elif param.name() == 'readout' or param.name() in \
-            putils.iter_children(self.settings.child('camera_settings', 'readout_settings')):
+            putils.iter_children(self.settings.child('readout_settings')):
             self.get_xaxis()
         elif param.name() == 'get_calib':
             if param.value():
@@ -81,18 +78,20 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
     def ini_detector(self, controller=None):
 
 
-        ind_camera = self.settings.child('camera_settings', 'serial_number').opts['limits'].index(self.settings['camera_settings', 'serial_number'])
-        ind_spectro = self.settings.child('shamrock_settings', 'spectro_sn').opts['limits'].index(self.settings['shamrock_settings', 'spectro_sn'])
+        ind_camera = self.settings.child('serial_number').opts['limits'].index(self.settings['serial_number'])
+        ind_spectro = self.settings.child('sham_settings',
+                                          'spectro_sn').opts['limits'].index(self.settings['sham_settings', 'spectro_sn'])
         if self.is_master:
             self.controller = ShamrockCCDCompo(cam_idx=ind_camera, spec_idx=ind_spectro)
 
-        cam_status, cam_init = super().ini_detector(controller)
+        cam_status, cam_init = super().ini_detector(self.controller)
         QtWidgets.QApplication.processEvents()
 
         self.shamrock_controller = DAQ_Move_ShamrockPll(None, self.settings.child('sham_settings').saveState())
         self.shamrock_controller.settings = self.settings.child('sham_settings')
+        self.settings.child('sham_settings','controller').hide()
         self.shamrock_controller.emit_status = self.emit_status
-        sham_status, sham_init = self.shamrock_controller.ini_stage(controller.shamrock)
+        sham_status, sham_init = self.shamrock_controller.ini_stage(self.controller.shamrock)
 
         QtWidgets.QApplication.processEvents()
 
@@ -103,11 +102,13 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
 
     def setCalibration(self):
         #setNpixels
-        width, height = self.get_pixel_size()
+        width = self.controller.get_pixel_size()[0]
         self.shamrock_controller.controller.set_number_pixels(self.ccdsize_x)
         self.shamrock_controller.controller.set_pixel_width(width)
 
-        self.shamrock_controller.controller.get_wavelength()
+        self.settings.child('sham_settings',
+                            'spectro_settings',
+                            'spectro_wl').setValue(self.shamrock_controller.controller.get_wavelength()*1e9)
         self.x_axis = self.get_xaxis()
 
     def get_xaxis(self):
@@ -120,10 +121,12 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
                 Contains a vector of integer corresponding to the horizontal camera pixels.
         """
 
-        if self.shamrock_controller is None or np.abs(self.settings.child('sham_settings', 'spectro_settings', 'spectro_wl').value()) < 1e-3:
+        if self.shamrock_controller is None or np.abs(self.settings.child('sham_settings',
+                                                                          'spectro_settings',
+                                                                          'spectro_wl').value()) < 1e-3:
             nx = self.ccdsize_x
             calib = np.linspace(0, nx, nx-1)
-            self.x_axis = Axis(data=calib, label='Wavelength (nm)')
+            self.x_axis = Axis(data=calib, label='Wavelength', units='nm')
         else:
             calib = self.shamrock_controller.controller.get_calibration()*1e9
 
@@ -135,7 +138,7 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
                 self.settings.child('sham_settings', 'spectro_settings', 'flip_wavelength').setValue(False)
                 self.emit_status(ThreadCommand('Update_Status', ['Impossible to flip wavelength', "log"]))
 
-            self.x_axis = Axis(data=calib, label='Wavelength (nm)')
+            self.x_axis = Axis(data=calib, label='Wavelength', units='nm')
         return self.x_axis
 
     def stop(self):
@@ -209,9 +212,14 @@ class DAQ_1DViewer_ShamrockCCD(DAQ_2DViewer_AndorCCDPll):
                     labels = ['Intensity']
                     data_arrays = [out_frames]
 
+                if self.data_shape == 'Data1D':
+                    data_name = 'Spectrum'
+                else:
+                    data_name = 'Camera'
+
                 self.dte_signal.emit(
-                    DataToExport('Spectro',
-                                 data=[DataFromPlugins(name='Camera',
+                    DataToExport('Spectrometer',
+                                 data=[DataFromPlugins(name=data_name,
                                                        data=data_arrays,
                                                        dim=self.data_shape,
                                                        labels=labels,

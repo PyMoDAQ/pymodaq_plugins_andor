@@ -2,14 +2,14 @@ import numpy as np
 from enum import StrEnum
 from qtpy import QtWidgets, QtCore
 
-from pymodaq_utils.utils import ThreadCommand, find_dict_in_list_from_key_val
+from pymodaq_utils.utils import ThreadCommand
 from pymodaq_gui.parameter.utils import iter_children
 
-from pymodaq.control_modules.viewer_utility_classes import DAQ_Viewer_base, comon_parameters, main
-from pymodaq.utils.data import DataFromPlugins, Axis, DataToExport
+from pymodaq.control_modules.viewer_utility_classes import comon_parameters, main
+from pymodaq.utils.data import Axis
 
 from pymodaq_plugins_utils.hardware.camera_base_pylablib import (
-    CameraBasePyLabLib, cam_params, CameraCallback)
+    CameraBasePyLabLib, cam_params)
 
 from pylablib.devices.Andor import AndorSDK2Camera
 from pymodaq_plugins_andor.hardware.sdk2_utils import get_camera_names
@@ -94,6 +94,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
 
     hardware_averaging = True  # will use the accumulate acquisition mode if averaging is necessary
 
+    cam_params = cam_params
     serial_params = [{'title': 'Camera:', 'name': 'serial_number', 'type': 'list', 'value': CAM_NAMES[0],
                       'limits': CAM_NAMES}]
     params = comon_parameters + serial_params + cam_params
@@ -151,8 +152,7 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
     def ini_detector_custom(self, controller=None):
 
         ind_camera = self.settings.child('serial_number').opts['limits'].index(self.settings['serial_number'])
-        ind_spectro = SPEC_NAMES.index(self.settings['spectro_sn'])
-        if self.is_master:
+        if self.is_master and controller==None:
             self.controller = AndorSDK2Camera(idx=ind_camera)
 
         self.ccdsize_x, self.ccdsize_y = self.controller.get_detector_size()

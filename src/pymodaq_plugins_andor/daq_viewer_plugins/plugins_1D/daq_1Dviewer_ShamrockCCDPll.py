@@ -205,15 +205,12 @@ class DAQ_1DViewer_ShamrockCCDPll(DAQ_2DViewer_AndorCCDPll):
                 else:
                     out_frames = out_frames[0, ...]
 
-                if out_frames.shape[-1] == 3:
-                    data_arrays = [np.atleast_1d(out_frames[..., ind]) for ind in range(3)]
-                    labels = ['Red', 'Green', 'Blue']
-                else:
-                    labels = ['Intensity']
-                    data_arrays = [out_frames]
+                labels = ['Intensity']
+                data_arrays = [out_frames]
 
                 if self.data_shape == 'Data1D':
                     data_name = 'Spectrum'
+                    data_arrays = np.squeeze(data_arrays)
                 else:
                     data_name = 'Camera'
 
@@ -223,7 +220,7 @@ class DAQ_1DViewer_ShamrockCCDPll(DAQ_2DViewer_AndorCCDPll):
                                                        data=data_arrays,
                                                        dim=self.data_shape,
                                                        labels=labels,
-                                                       axes=[self.y_axis, self.x_axis])]))
+                                                       axes=[self.x_axis])]))
             if self.settings.child('timing_opts', 'fps_on').value():
                 self.update_fps()
 

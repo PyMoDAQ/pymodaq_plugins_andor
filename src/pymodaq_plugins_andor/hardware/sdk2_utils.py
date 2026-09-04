@@ -11,8 +11,8 @@ logger = set_logger(get_module_name(__file__))
 config = GlobalConfig()
 
 
-if config('andor', 'sdk2', 'dll_path') != "":
-    pll.par["devices/dlls/andor_sdk2"] = config('andor', 'sdk2', 'dll_path')
+#if config('andor', 'sdk2', 'dll_path') is not "":
+#    pll.par["devices/dlls/andor_sdk2"] = config('andor', 'sdk2', 'dll_path')
 
 
 def get_camera_names():

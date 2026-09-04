@@ -14,6 +14,8 @@ description = 'Set of PyMoDAQ plugins for Andor Camera (CCD camera using SDK2, S
 dependencies = [
     "pymodaq>=5.0.0",
     "pylablib",
+    "opencv-python",
+    "pymodaq-plugins-utils"
     #todo: list here all dependencies your package may have
 ]
 

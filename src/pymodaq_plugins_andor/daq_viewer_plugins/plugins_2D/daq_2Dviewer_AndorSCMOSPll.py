@@ -76,7 +76,7 @@ class DAQ_2DViewer_AndorSCMOSPll(CameraBasePyLabLib):
     hardware_averaging = True  # will use the accumulate acquisition mode if averaging is neccessary
     live_mode_available = True
 
-    serial_params = [{'title': 'Camera:', 'name': 'serial_number', 'type': 'list', 'value': CAM_NAMES[0],
+    serial_params = [{'title': 'Camera:', 'name': 'serial_number', 'type': 'list', 'value': CAM_NAMES[0] if CAM_NAMES else '',
                       'limits': CAM_NAMES}]
     params = comon_parameters + serial_params + cam_params
 

@@ -12,7 +12,7 @@ from pymodaq_gui.parameter import utils as putils
 from pymodaq.utils.data import Axis, DataFromPlugins
 
 from ..plugins_2D.daq_2Dviewer_AndorSCMOS import DAQ_2DViewer_AndorSCMOS
-from ...daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
+from pymodaq_plugins_andor.legacy.daq_move_Shamrock import DAQ_Move_Shamrock
 
 logger = set_logger(get_module_name(__file__))
 
@@ -27,6 +27,7 @@ class DAQ_1DViewer_ShamrockSCMOSLegacy(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamroc
         --------
         utility_classes.DAQ_Viewer_base
     """
+    supported_platforms = ('win32',)  # the Shamrock SDK is loaded with ctypes.windll
 
     param_camera = DAQ_2DViewer_AndorSCMOS.params
     params_shamrock = DAQ_Move_Shamrock.params

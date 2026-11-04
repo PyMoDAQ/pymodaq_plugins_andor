@@ -49,3 +49,9 @@ Viewer2D
 * **AndorSCMOSPll**: Andor CCD camera using the SDK3 through the pylablib driver (experimental but already in use,
   subject to changes)
 
+
+Legacy
+======
+The former plugins replaced by the pylablib based ones (Andor CCD with the SDK2, Shamrock, ShamrockCCD and
+ShamrockCCDLegacy) are kept in ``src/pymodaq_plugins_andor/legacy``. They are not loaded by PyMoDAQ and are not runnable
+as they are.

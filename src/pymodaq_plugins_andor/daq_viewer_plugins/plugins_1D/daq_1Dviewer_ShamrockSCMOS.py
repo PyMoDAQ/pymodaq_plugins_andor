@@ -12,7 +12,7 @@ from pymodaq.control_modules.viewer_utility_classes import main, DAQ_Viewer_base
 
 
 from pymodaq_plugins_andor.daq_viewer_plugins.plugins_2D.daq_2Dviewer_AndorSCMOS import DAQ_2DViewer_AndorSCMOS
-from pymodaq_plugins_andor.daq_move_plugins.daq_move_Shamrock import DAQ_Move_Shamrock
+from pymodaq_plugins_andor.daq_move_plugins.daq_move_ShamrockPll import DAQ_Move_ShamrockPll
 
 logger = set_logger(get_module_name(__file__))
 
@@ -27,9 +27,9 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS):
         --------
         utility_classes.DAQ_Viewer_base
     """
+    supported_platforms = ('win32',)  # the Andor SDK3 is loaded with ctypes.windll
     param_camera = DAQ_2DViewer_AndorSCMOS.params
-    params_shamrock = DAQ_Move_Shamrock.params
-    putils.get_param_dict_from_name(params_shamrock, 'andor_lib', pop=True)
+    params_shamrock = DAQ_Move_ShamrockPll.params
 
     d = putils.get_param_dict_from_name(params_shamrock, 'spectro_wl')
     if d is not None:
@@ -46,7 +46,7 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS):
 
     def ini_attributes(self):
         self.controller: DAQ_2DViewer_AndorSCMOS = None
-        self.shamrock_controller: DAQ_Move_Shamrock = None
+        self.shamrock_controller: DAQ_Move_ShamrockPll = None
 
         self.x_axis: Axis = None
         self.is_calibrated = False
@@ -81,10 +81,11 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS):
         cam_status, cam_init = super().ini_detector(controller)
         QtWidgets.QApplication.processEvents()
 
-        self.shamrock_controller = DAQ_Move_Shamrock(None, self.settings.child('sham_settings').saveState())
+        self.shamrock_controller = DAQ_Move_ShamrockPll(None, self.settings.child('sham_settings').saveState())
         self.shamrock_controller.settings = self.settings.child('sham_settings')
+        self.settings.child('sham_settings', 'controller').hide()
         self.shamrock_controller.emit_status = self.emit_status
-        sham_status, sham_init = self.shamrock_controller.ini_stage(controller)
+        sham_status, sham_init = self.shamrock_controller.ini_stage()
 
         QtWidgets.QApplication.processEvents()
 
@@ -97,21 +98,19 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS):
     def setCalibration(self):
         #setNpixels
         width, height = self.get_pixel_size()
-        err = self.shamrock_controller.controller.SetNumberPixelsSR(0, self.get_ROI_size_x())
-        err = self.shamrock_controller.controller.SetPixelWidthSR(0, width)
+        self.shamrock_controller.controller.set_number_pixels(self.get_ROI_size_x())
+        self.shamrock_controller.controller.set_pixel_width(width)
 
-        self.shamrock_controller.get_wavelength()
+        self.settings.child('sham_settings', 'spectro_settings',
+                            'spectro_wl').setValue(self.shamrock_controller.controller.get_wavelength() * 1e9)
         self.x_axis = self.get_xaxis()
 
 
     def getCalibration(self):
 
         if self.shamrock_controller is not None and self.shamrock_controller.controller is not None:
-            (err, calib) = self.shamrock_controller.controller.GetCalibrationSR(0, self.get_ROI_size_x())
-            if err != "SHAMROCK_SUCCESS":
-                raise Exception(err)
-
-            calib = np.array(calib)
+            self.shamrock_controller.controller.set_number_pixels(self.get_ROI_size_x())  # the ROI may have changed
+            calib = np.array(self.shamrock_controller.controller.get_calibration()) * 1e9  # m to nm
         else:
             raise(Exception('controller not defined'))
         self.is_calibrated = True
@@ -158,7 +157,7 @@ class DAQ_1DViewer_ShamrockSCMOS(DAQ_2DViewer_AndorSCMOS):
         if self.controller is not None:
             super().stop()
         if self.shamrock_controller is not None:
-            self.shamrock_controller.stop()
+            self.shamrock_controller.stop_motion()
 
     def close(self):
         self.stop()

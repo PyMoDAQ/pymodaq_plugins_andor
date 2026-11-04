@@ -29,7 +29,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
 
 
     spectro_params = [
-        {'title': 'Spectro SN:', 'name': 'spectro_sn', 'type': 'list', 'value': SPEC_NAMES[0],
+        {'title': 'Spectro SN:', 'name': 'spectro_sn', 'type': 'list', 'value': SPEC_NAMES[0] if SPEC_NAMES else '',
             'limits': SPEC_NAMES},
         {'title': 'Spectro Settings:', 'name': 'spectro_settings', 'type': 'group', 'expanded': True, 'children': [
             {'title': 'Wavelength (nm):', 'name': 'spectro_wl', 'type': 'float', 'value': 600, 'min': 0},

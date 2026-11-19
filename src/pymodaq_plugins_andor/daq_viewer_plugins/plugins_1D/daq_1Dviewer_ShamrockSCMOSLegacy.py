@@ -249,3 +249,5 @@ class DAQ_1DViewer_ShamrockSCMOSLegacy(DAQ_2DViewer_AndorSCMOS, DAQ_Move_Shamroc
             logger.exception(str(e))
 
 
+if __name__ == '__main__':
+    main(__file__, True)

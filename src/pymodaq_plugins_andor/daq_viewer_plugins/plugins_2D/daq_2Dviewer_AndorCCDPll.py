@@ -72,6 +72,7 @@ cam_params.extend(
             {'title': 'Current value:', 'name': 'current_value', 'type': 'float', 'value': 0, 'default': 0,
                 'readonly': True},
             {'title': 'Status:', 'name': 'status', 'type': 'str', 'limits': [], 'readonly': True},
+            {'title': 'Fan mode:', 'name': 'fan_mode', 'type': 'list', 'limits': ['full', 'low', 'off'], 'value': 'full'},
         ]},
     ]
 )
@@ -129,6 +130,9 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
         try:
             if param.name() == 'set_point':
                 self.controller.set_temperature(param.value())
+
+            elif param.name() == 'fan_mode':
+                self.controller.set_fan_mode(param.value())
 
             elif param.name() == 'readout' or param.name() in iter_children(
                     self.settings.child('readout_settings')):
@@ -280,10 +284,10 @@ class DAQ_2DViewer_AndorCCDPll(CameraBasePyLabLib):
         self.settings.child('temperature_settings', 'set_point').setLimits((temp[0], temp[1]))
         enable = self.settings['temperature_settings', 'enable_cooling']
         self.controller.set_temperature(self.settings['temperature_settings', 'set_point'], enable)
+        self.controller.set_fan_mode(self.settings['temperature_settings', 'fan_mode'])
 
         if not self.temperature_timer.isActive():
             self.temperature_timer.start(2000)  # Timer event fired every 2s
-
             self.update_temperature()
 
     def update_temperature(self):

@@ -201,7 +201,6 @@ class DAQ_1DViewer_ShamrockCCDPll(DAQ_2DViewer_AndorCCDPll):
 
                 if self.n_frames > 1:
                     pass
-                    # todo handle chunks of frames in ND data
                 else:
                     out_frames = out_frames[0, ...]
 

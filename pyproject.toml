@@ -19,16 +19,15 @@ dependencies = [
     "pylablib",
     "opencv-python",
     "pymodaq-plugins-utils"
-    #todo: list here all dependencies your package may have
 ]
 
 authors = [
     {name = "Weber Sébastien", email = 'sebastien.weber@cemes.fr'},
-    #todo: list here all authors of your plugin
+    {name = "Guyot Tilly", email = 'tilly.guyot@umontpellier.fr'},
 ]
 maintainers = [
     {name = "Weber Sébastien", email = 'sebastien.weber@cemes.fr'},
-    #todo: list here all maintainers of your plugin
+    {name = "Guyot Tilly", email = 'tilly.guyot@umontpellier.fr'},
 ]
 
 # nottodo: leave everything below as is!

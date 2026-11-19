@@ -22,7 +22,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
     is_multiaxes = False
     _axis_names: Union[List[str], Dict[str, int]] = ['Wavelength']
     _controller_units: Union[str, List[str]] = ['nm']
-    _epsilon: Union[float, List[float]] = 0.1
+    _epsilons: Union[float, List[float]] = 0.1
     data_actuator_type = DataActuatorType.DataActuator
 
     SPEC_NAMES = get_spectrometers()
@@ -49,7 +49,7 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
             {'title': 'Go to zero order:', 'name': 'zero_order', 'type': 'bool'},
         ]},
     ]
-    params = comon_parameters_fun(is_multiaxes, axis_names=_axis_names, epsilon=_epsilon) + spectro_params
+    params = comon_parameters_fun(is_multiaxes, axis_names=_axis_names, epsilon=_epsilons) + spectro_params
 
     def ini_attributes(self):
 
@@ -175,8 +175,8 @@ class DAQ_Move_ShamrockPll(DAQ_Move_base):
         ----------
         value: (float) value of the relative target positioning
         """
-        value = self.check_bound(self.current_position + value) - self.current_position
-        self.target_value = value + self.current_position
+        value = self.check_bound(self.current_value + value) - self.current_value
+        self.target_value = value + self.current_value
         target_value = self.set_position_relative_with_scaling(self.target_value)
 
         self.controller.set_wavelength(target_value.value('m'))

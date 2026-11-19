@@ -53,6 +53,7 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
         --------
         utility_classes.DAQ_Viewer_base
     """
+    supported_platforms = ('win32',)  # the Andor SDK3 is loaded with ctypes.windll
     start_waitloop = QtCore.Signal(int, int)
     stop_waitloop = QtCore.Signal()
 
@@ -396,9 +397,11 @@ class DAQ_2DViewer_AndorSCMOS(DAQ_Viewer_base):
             daq_utils.ThreadCommand, hardware1D.DAQ_1DViewer_Picoscope.update_pico_settings
         """
         model = self.settings.child('camera_settings', 'camera_model')
-        self.camera_controller = self.ini_detector_init(old_controller=controller,
-                                                        new_controller=api.AndorCamera(
-                                                            model.opts['limits'].index(model.value())))
+
+        if self.is_master:
+            self.camera_controller = api.AndorCamera(model.opts['limits'].index(model.value()))
+        else:
+            self.camera_controller = controller
 
         self.ini_camera()
 

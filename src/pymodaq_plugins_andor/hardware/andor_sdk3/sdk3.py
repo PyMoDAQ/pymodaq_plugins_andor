@@ -29,7 +29,7 @@ Next add this directory to your system PATH
 In Windows this is accomplished through
 Control Panel / System / Advanced System Settings / Environment Variables / System Variables
 and add to path: 
-C:\Program Files\Andor Driver Pack 3
+C:\\Program Files\\Andor Driver Pack 3
 """
 import sys
 import ctypes

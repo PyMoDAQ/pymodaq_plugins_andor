@@ -10,6 +10,7 @@ from pymodaq.utils.logger import set_logger, get_module_name
 from pymodaq_gui.parameter import utils as putils
 
 from pymodaq.utils.data import Axis, DataFromPlugins
+from pymodaq.control_modules.viewer_utility_classes import main
 
 from ..plugins_2D.daq_2Dviewer_AndorSCMOS import DAQ_2DViewer_AndorSCMOS
 from pymodaq_plugins_andor.legacy.daq_move_Shamrock import DAQ_Move_Shamrock
